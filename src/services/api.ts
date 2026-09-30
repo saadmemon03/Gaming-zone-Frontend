@@ -9,8 +9,8 @@ import type { DashboardStats, RevenueData, StationOverview } from "../types/dash
 //  Base URL: http://localhost:5000/api
 // ─────────────────────────────────────────────────────────────────────────────
 
-declare const process: { env: { REACT_APP_API_BASE_URL?: string } };
-const BASE_URL = process.env.REACT_APP_API_BASE_URL || "http://localhost:5000/api";
+declare const process: { env: { VITE_API_URL_BASE_URL?: string } };
+const BASE_URL = process.env.VITE_API_URL_BASE_URL || "http://localhost:5000/api";
 // ─── Token helpers ────────────────────────────────────────────────────────────
 function getToken() {
   return localStorage.getItem("gaming_token") ?? "";
