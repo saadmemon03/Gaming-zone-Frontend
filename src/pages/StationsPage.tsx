@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Clock3, Monitor } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { stationsApi, bookingsApi } from "../services/api";
 import { toast } from "react-hot-toast";
 import type { Station } from "../types/Station";
@@ -10,8 +11,7 @@ import BookingForm from "../components/bookings/BookingForm";
 import SearchBar from "../components/common/SearchBar";
 
 const StationsPage = () => {
-  const [stations, setStations] = useState<Station[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
 
   // Time Slots & Bookings State
@@ -21,21 +21,21 @@ const StationsPage = () => {
   const [editingBooking, setEditingBooking] = useState<Booking | undefined>();
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
-  const fetchStations = async () => {
-    try {
-      const res = await stationsApi.getAll();
-      setStations(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load stations");
-    } finally {
-      setLoading(false);
+  const { data: stationsData, isLoading: loading } = useQuery({
+    queryKey: ["stations"],
+    queryFn: async () => {
+      try {
+        const res = await stationsApi.getAll();
+        return res.data || [];
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to load stations");
+        throw err;
+      }
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchStations();
-  }, []);
+  const stations = stationsData || [];
 
   const filteredStations = stations.filter(s => 
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -55,7 +55,7 @@ const StationsPage = () => {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StationStat title="Total Stations" value={stations.length.toString()} />
         <StationStat title="Available" value={stations.filter(s => s.status === 'Available').length.toString()} color="text-green-400" />
-        <StationStat title="Occupied" value={stations.filter(s => s.status === 'Occupied').length.toString()} color="text-purple-400" />
+        <StationStat title="Occupied" value={stations.filter(s => s.status === 'Occupied').length.toString()} color="text-indigo-300" />
         <StationStat title="Maintenance" value={stations.filter(s => s.status === 'Maintenance').length.toString()} color="text-yellow-400" />
       </div>
 
@@ -76,8 +76,8 @@ const StationsPage = () => {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10">
-                    <Monitor size={22} className="text-purple-400" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-400/10">
+                    <Monitor size={22} className="text-indigo-300" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">{station.name}</h3>
@@ -159,8 +159,9 @@ const StationsPage = () => {
               }
               setIsBookingModalOpen(false);
               setEditingBooking(undefined);
-              fetchStations(); // Refresh station statuses
+              queryClient.invalidateQueries({ queryKey: ["stations"] }); // Refresh station statuses
             } catch (err: any) {
+              console.error(err);
               toast.error(err.message || "Failed to create booking");
             }
           }} 
@@ -184,8 +185,8 @@ const StationStat = ({ title, value, color = "text-white" }: { title: string, va
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: Record<string, string> = {
     Available: "bg-green-500/10 text-green-400",
-    Occupied: "bg-purple-500/10 text-purple-400",
-    Reserved: "bg-blue-500/10 text-blue-400",
+    Occupied: "bg-indigo-400/10 text-indigo-300",
+    Reserved: "bg-rose-400/10 text-rose-300",
     Maintenance: "bg-yellow-500/10 text-yellow-400",
   };
   return <span className={`rounded-full px-3 py-1 text-xs font-medium ${styles[status]}`}>{status}</span>;

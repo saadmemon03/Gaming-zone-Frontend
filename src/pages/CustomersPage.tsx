@@ -123,12 +123,12 @@ export default function CustomersPage() {
         <StatCard
           label="Registered"
           value={customers.filter((c) => !c.isGuest).length}
-          color="text-purple-400"
+          color="text-indigo-300"
         />
         <StatCard
           label="Walk-in Guests"
           value={customers.filter((c) => c.isGuest).length}
-          color="text-blue-400"
+          color="text-rose-300"
         />
       </div>
 
@@ -150,23 +150,23 @@ export default function CustomersPage() {
             <button
               key={c.key}
               onClick={() => setSelected(c)}
-              className="flex w-full items-center justify-between rounded-2xl border border-[#273449] bg-[#151C2C] px-5 py-4 text-left transition hover:border-[#7C3AED]/60 hover:bg-[#1B2435]"
+              className="flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-[#273449] bg-[#151C2C] px-3 py-4 text-left transition hover:border-[#7C3AED]/60 hover:bg-[#1B2435] sm:gap-4 sm:px-5"
             >
               {/* Left */}
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-4">
                 {/* Avatar */}
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-500/10">
-                  <User size={20} className="text-purple-400" />
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-400/10">
+                  <User size={20} className="text-indigo-300" />
                 </div>
 
-                <div className="text-left">
-                  <p className="font-semibold text-white">{c.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{c.contact}</p>
+                <div className="min-w-0 text-left">
+                  <p className="truncate font-semibold text-white">{c.name}</p>
+                  <p className="mt-0.5 truncate text-xs text-slate-500">{c.contact}</p>
                 </div>
               </div>
 
               {/* Right */}
-              <div className="flex items-center gap-6">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-6">
                 {/* Bookings count */}
                 <div className="hidden text-right sm:block">
                   <p className="text-sm font-semibold text-white">{c.totalBookings}</p>
@@ -216,12 +216,12 @@ function HistoryModal({
       />
 
       {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto bg-[#0B0F19] shadow-2xl">
+      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto bg-[#1f2335] shadow-2xl">
         {/* Top bar */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#273449] bg-[#0B0F19] px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#273449] bg-[#1f2335] px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10">
-              <User size={18} className="text-purple-400" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-400/10">
+              <User size={18} className="text-indigo-300" />
             </div>
             <div>
               <p className="font-semibold text-white">{customer.name}</p>
@@ -237,9 +237,9 @@ function HistoryModal({
         </div>
 
         {/* Summary cards */}
-        <div className="grid grid-cols-3 gap-3 p-6">
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-6">
           <MiniCard
-            icon={<Clock size={16} className="text-purple-400" />}
+            icon={<Clock size={16} className="text-indigo-300" />}
             label="Bookings"
             value={String(customer.totalBookings)}
           />
@@ -249,7 +249,7 @@ function HistoryModal({
             value={`Rs. ${customer.totalSpent.toLocaleString()}`}
           />
           <MiniCard
-            icon={<Monitor size={16} className="text-blue-400" />}
+            icon={<Monitor size={16} className="text-rose-300" />}
             label="Type"
             value={customer.isGuest ? "Guest" : "Member"}
           />

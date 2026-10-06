@@ -82,7 +82,7 @@ export default function StationTimeSlotsModal({ station, onBookSlot, onEditBooki
                     {slot.booking.guestName || slot.booking.user?.name || "Guest"}
                   </span>
                   <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] ${
-                    slot.booking.status === "Confirmed" ? "bg-purple-500/10 text-purple-400" : "bg-yellow-500/10 text-yellow-400"
+                    slot.booking.status === "Confirmed" ? "bg-indigo-400/10 text-indigo-300" : "bg-yellow-500/10 text-yellow-400"
                   }`}>
                     {slot.booking.status}
                   </span>
@@ -90,7 +90,7 @@ export default function StationTimeSlotsModal({ station, onBookSlot, onEditBooki
                 <button
                   type="button"
                   onClick={() => onEditBooking(slot.booking)}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-[#273449] px-2.5 py-1.5 text-xs text-blue-300 hover:bg-blue-500/10"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#273449] px-2.5 py-1.5 text-xs text-rose-200 hover:bg-rose-400/10"
                 >
                   <Edit size={13} />
                   Edit

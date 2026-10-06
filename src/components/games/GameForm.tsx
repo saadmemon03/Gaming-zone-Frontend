@@ -2,28 +2,28 @@ import { useState } from "react";
 
 import Button from "../ui/Button";
 import Input from "../ui/Input";
-import Select from "../ui/Select";
 
 import type { Game, GamePlatform } from "../../types/game";
 
 interface GameFormProps {
   game?: Game;
+  existingGames?: Game[];
   onSubmit: (data: Omit<Game, "id">) => void;
   onCancel: () => void;
 }
 
 export default function GameForm({
   game,
+  existingGames = [],
   onSubmit,
   onCancel,
 }: GameFormProps) {
   const [name, setName] = useState(
     game?.name ?? ""
   );
+  const [nameError, setNameError] = useState("");
 
-  const [platform, setPlatform] = useState<GamePlatform>(
-    game?.platform ?? "PC"
-  );
+  const platform: GamePlatform = game?.platform ?? "PC";
 
   const [description, setDescription] = useState(
     game?.description ?? ""
@@ -37,9 +37,25 @@ export default function GameForm({
     event: React.FormEvent<HTMLFormElement>
   ) => {
     event.preventDefault();
+    setNameError("");
+
+    const isDuplicate = existingGames.some((g) => {
+      if (g.name.trim().toLowerCase() !== name.trim().toLowerCase()) return false;
+      if (game) {
+        const currentId = game.id || (game as any)._id;
+        const gId = g.id || (g as any)._id;
+        if (gId === currentId) return false;
+      }
+      return true;
+    });
+
+    if (isDuplicate) {
+      setNameError("Game name already exists!");
+      return;
+    }
 
     onSubmit({
-      name,
+      name: name.trim(),
       platform,
       description,
       isActive,
@@ -52,38 +68,22 @@ export default function GameForm({
       className="space-y-4"
     >
       {/* Game Name */}
-      <Input
-        id="game-name"
-        label="Game Name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Counter Strike 2"
-        required
-      />
-
-      {/* Platform */}
-      <Select
-        id="game-platform"
-        label="Platform"
-        value={platform}
-        onChange={(e) =>
-          setPlatform(e.target.value as GamePlatform)
-        }
-        options={[
-          {
-            label: "PC",
-            value: "PC",
-          },
-          {
-            label: "PlayStation 5",
-            value: "PlayStation 5",
-          },
-          {
-            label: "Xbox",
-            value: "Xbox",
-          },
-        ]}
-      />
+      <div>
+        <Input
+          id="game-name"
+          label="Game Name"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameError) setNameError("");
+          }}
+          placeholder="Counter Strike 2"
+          required
+        />
+        {nameError && (
+          <p className="text-red-500 text-xs mt-1 font-medium">{nameError}</p>
+        )}
+      </div>
 
       {/* Description */}
       <div>
@@ -104,7 +104,7 @@ export default function GameForm({
           className="
             w-full rounded-lg
             border border-[#273449]
-            bg-[#0B0F19]
+            bg-[#1f2335]
             px-3 py-2
             text-sm text-white
             outline-none

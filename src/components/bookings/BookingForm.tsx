@@ -133,7 +133,7 @@ export default function BookingForm({ initialStationId, initialStartTime, initia
   return (
     <>
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           id="booking-guest"
           label="Customer Name"
@@ -190,7 +190,7 @@ export default function BookingForm({ initialStationId, initialStartTime, initia
 
 
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Input
           id="booking-start"
           label="Start Time"

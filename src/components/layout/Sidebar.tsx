@@ -17,27 +17,27 @@ const navigation = [
   {
     name: "Dashboard",
     icon: LayoutDashboard,
-    path: "/",
+    path: "/admin",
   },
   {
     name: "Gaming Stations",
     icon: Monitor,
-    path: "/stations",
+    path: "/admin/stations",
   },
   {
     name: "Games",
     icon: Gamepad2,
-    path: "/games",
+    path: "/admin/games",
   },
   {
     name: "Bookings",
     icon: CalendarCheck,
-    path: "/bookings",
+    path: "/admin/bookings",
   },
   {
     name: "Customers",
     icon: Users,
-    path: "/customers",
+    path: "/admin/customers",
   },
 ];
 
@@ -46,7 +46,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     <>
       {/* Mobile Overlay */}
       {isOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close sidebar"
           className="fixed inset-0 z-40 bg-black/60 lg:hidden"
           onClick={onClose}
         />
@@ -54,13 +56,15 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
       <aside
         className={`
-          fixed left-0 top-0 z-50 h-screen w-64
+          fixed left-0 top-0 z-50 flex h-dvh w-64 flex-col
           border-r border-[#273449]
-          bg-[#0B0F19]
+          bg-[#1f2335]
           transition-transform duration-300
           lg:translate-x-0
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
         `}
+        id="admin-sidebar"
+        aria-label="Admin navigation"
       >
         {/* Logo */}
         <div className="flex h-16 items-center justify-between border-b border-[#273449] px-5">
@@ -80,6 +84,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           <button
+            type="button"
+            aria-label="Close sidebar"
             onClick={onClose}
             className="text-slate-400 hover:text-white lg:hidden"
           >
@@ -88,7 +94,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="space-y-1 p-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
           {navigation.map((item) => {
             const Icon = item.icon;
 
@@ -115,11 +121,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </nav>
 
         {/* Bottom */}
-        <div className="absolute bottom-0 w-full border-t border-[#273449] p-4">
+        <div className="mt-auto border-t border-[#273449] p-4">
           <button
             onClick={() => {
               localStorage.removeItem("gaming_token");
-              window.location.href = "/login";
+              window.location.href = "/admin/login";
             }}
             className="
               flex w-full items-center gap-3 rounded-lg

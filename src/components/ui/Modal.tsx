@@ -65,7 +65,7 @@ export default function Modal({
       {/* Modal */}
       <div
         className={`
-          relative z-10 w-full
+          relative z-10 max-h-[calc(100dvh-2rem)] w-full overflow-y-auto
           ${sizes[size]}
           rounded-xl
           border border-[#273449]
@@ -78,7 +78,7 @@ export default function Modal({
           className="
             flex items-center justify-between
             border-b border-[#273449]
-            px-5 py-4
+            px-4 py-3 sm:px-5 sm:py-4
           "
         >
           <h2 className="text-lg font-semibold text-white">
@@ -90,7 +90,7 @@ export default function Modal({
             className="
               rounded-lg p-2
               text-slate-400
-              hover:bg-[#0B0F19]
+              hover:bg-[#1f2335]
               hover:text-white
             "
           >
@@ -99,7 +99,7 @@ export default function Modal({
         </div>
 
         {/* Content */}
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           {children}
         </div>
       </div>

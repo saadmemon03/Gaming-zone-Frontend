@@ -13,11 +13,17 @@ export interface Station {
   _id?: string;
   name: string;
   type: StationType;
+  platform?: string;
   specs?: string;
   hourlyRate: number;
+  pricePerHour?: number;
   status: StationStatus;
   usageHours?: number;
   image?: string;
+  activeBooking?: {
+    startTime: string;
+    endTime: string;
+  };
   createdAt?: string;
   updatedAt?: string;
 }

@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import PageHeader from "../components/common/PageHeader";
 import SearchBar from "../components/common/SearchBar";
 import Table, { type TableColumn } from "../components/ui/Table";
@@ -10,33 +11,33 @@ import { Trash2, Edit } from "lucide-react";
 import { toast } from "react-hot-toast";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
 
-  const fetchUsers = async () => {
-    try {
-      const res = await usersApi.getAll();
-      setUsers(res.data || []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to fetch users");
-    } finally {
-      setLoading(false);
+  const { data: usersData, isLoading: loading } = useQuery({
+    queryKey: ["users"],
+    queryFn: async () => {
+      try {
+        const res = await usersApi.getAll();
+        return res.data || [];
+      } catch (err) {
+        console.error(err);
+        toast.error("Failed to fetch users");
+        throw err;
+      }
     }
-  };
+  });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const users = usersData || [];
 
   const handleDelete = async (id: string) => {
     if (window.confirm("Are you sure you want to delete this user?")) {
       try {
         await usersApi.delete(id);
         toast.success("User deleted successfully");
-        fetchUsers();
+        queryClient.invalidateQueries({ queryKey: ["users"] });
       } catch (err) {
+        console.error(err);
         toast.error("Failed to delete user");
       }
     }
@@ -48,8 +49,9 @@ export default function UsersPage() {
       try {
         await usersApi.update((user.id || user._id) as string, { role: newRole });
         toast.success("User role updated successfully");
-        fetchUsers();
+        queryClient.invalidateQueries({ queryKey: ["users"] });
       } catch (err) {
+        console.error(err);
         toast.error("Failed to update role");
       }
     }
@@ -99,7 +101,7 @@ export default function UsersPage() {
       header: "Actions",
       render: (user) => (
         <div className="flex gap-2">
-          <button onClick={() => handleEdit(user)} className="text-blue-400 hover:text-blue-300 p-1">
+          <button onClick={() => handleEdit(user)} className="text-rose-300 hover:text-rose-200 p-1">
             <Edit size={16} />
           </button>
           <button onClick={() => handleDelete((user.id || user._id) as string)} className="text-red-400 hover:text-red-300 p-1">

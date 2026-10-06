@@ -19,7 +19,7 @@ export default function StationCard({
     <div className="rounded-2xl border border-[#273449] bg-[#151C2C] p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-400/10 text-indigo-300">
             <Monitor size={20} />
           </div>
 

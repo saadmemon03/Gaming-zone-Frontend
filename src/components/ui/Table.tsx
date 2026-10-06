@@ -30,14 +30,14 @@ export default function Table<T>({
   ...props
 }: TableProps<T>) {
   return (
-    <div className="w-full overflow-x-auto rounded-xl border border-[#273449]">
+    <div className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-[#273449]">
       <table
         className={`w-full min-w-[700px] text-left ${className}`}
         {...props}
       >
         {/* Table Header */}
         <thead>
-          <tr className="border-b border-[#273449] bg-[#0B0F19]">
+          <tr className="border-b border-[#273449] bg-[#1f2335]">
             {columns.map((column) => (
               <th
                 key={column.key}

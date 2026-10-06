@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0B0F19] p-4 text-white">
+    <div className="flex min-h-screen items-center justify-center bg-[#1f2335] p-4 text-white">
       <div className="w-full max-w-md rounded-2xl border border-[#273449] bg-[#151C2C] p-8 shadow-xl">
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-[#7C3AED]">
@@ -84,7 +84,7 @@ export default function ForgotPasswordPage() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-[#273449] bg-[#0B0F19] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
+                className="w-full rounded-lg border border-[#273449] bg-[#1f2335] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
                 placeholder="saadblogger53@gmail.com"
               />
             </div>
@@ -107,7 +107,7 @@ export default function ForgotPasswordPage() {
                 required
                 value={otp}
                 onChange={(e) => setOtp(e.target.value)}
-                className="w-full rounded-lg border border-[#273449] bg-[#0B0F19] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
+                className="w-full rounded-lg border border-[#273449] bg-[#1f2335] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
                 placeholder="123456"
               />
             </div>
@@ -120,9 +120,12 @@ export default function ForgotPasswordPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   required
+                  minLength={8}
+                  pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}"
+                  title="Use at least 8 characters, including uppercase and lowercase letters, a number, and a special character."
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full rounded-lg border border-[#273449] bg-[#0B0F19] px-4 py-3 pr-12 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
+                  className="w-full rounded-lg border border-[#273449] bg-[#1f2335] px-4 py-3 pr-12 text-sm text-white placeholder-slate-500 outline-none transition focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED]"
                   placeholder="••••••••"
                 />
                 <button
@@ -133,6 +136,9 @@ export default function ForgotPasswordPage() {
                   {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
+              <p className="mt-2 text-xs text-slate-400">
+                At least 8 characters with uppercase, lowercase, a number, and a special character.
+              </p>
             </div>
 
             <button

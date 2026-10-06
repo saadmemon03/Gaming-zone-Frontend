@@ -45,7 +45,7 @@ function createQueryString(params?: Record<string, unknown>): string {
 }
 
 // ─── Generic fetch wrapper ────────────────────────────────────────────────────
-async function request<T>(
+export async function request<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -68,7 +68,12 @@ async function request<T>(
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
       clearToken();
-      window.location.href = "/login";
+      const role = localStorage.getItem("gaming_user_role");
+      if (role === "admin" || role === "manager" || role === "staff") {
+        window.location.href = "/admin/login";
+      } else {
+        window.dispatchEvent(new Event("auth_unauthorized"));
+      }
     }
     throw new Error(data?.message ?? "Something went wrong");
   }
@@ -105,13 +110,35 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
     saveToken(data.token);
+    localStorage.setItem("gaming_user_role", data.user.role || "user");
+    window.dispatchEvent(new Event("auth_changed"));
     return data;
   },
 
-  me: () => request<ApiResponse<User>>("/auth/me"),
+  register: (data: { name: string; email: string; password: string; phone?: string }) =>
+    request<ApiMessage>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  verifyEmail: (email: string, otp: string) =>
+    request<ApiMessage>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  resendVerificationOtp: (email: string) =>
+    request<ApiMessage>("/auth/resend-verification-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  me: () => request<{ success: boolean; user: User }>("/auth/me"),
 
   logout: () => {
     clearToken();
+    localStorage.removeItem("gaming_user_role");
+    window.dispatchEvent(new Event("auth_changed"));
   },
 
   forgotPassword: (email: string) =>
@@ -259,6 +286,7 @@ export const bookingsApi = {
     status?: string;
     page?: number;
     limit?: number;
+    my?: boolean;
   }) => request<ApiResponse<Booking[]>>(`/bookings${createQueryString(params)}`),
 
   getById: (id: string) => request<ApiResponse<Booking>>(`/bookings/${id}`),

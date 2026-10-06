@@ -30,10 +30,6 @@ export default function GameCard({
             <h3 className="font-semibold text-white">
               {game.name}
             </h3>
-
-            <p className="text-xs text-slate-500">
-              {game.platform}
-            </p>
           </div>
         </div>
 

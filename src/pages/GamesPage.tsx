@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import PageHeader from "../components/common/PageHeader";
 import SearchBar from "../components/common/SearchBar";
@@ -14,49 +15,46 @@ import { toast } from "react-hot-toast";
 import type { Game } from "../types/game";
 
 export default function GamesPage() {
-  const [games, setGames]           = useState<Game[]>([]);
+  const queryClient = useQueryClient();
   const [search, setSearch]         = useState("");
-  const [loading, setLoading]       = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [modalOpen, setModalOpen]   = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedGame, setSelectedGame] = useState<Game | undefined>();
 
-  // ── Server-side search with 400ms debounce ──────────────────────────────
-  const fetchGames = useCallback(async (q: string) => {
-    setLoading(true);
-    try {
-      const params: any = { limit: 100 };
-      if (q.trim()) params.search = q.trim();
-      const response = await gamesApi.getAll(params);
-      setGames(response.data || []);
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to load games");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    fetchGames("");
-  }, [fetchGames]);
-
   // Debounce search
   useEffect(() => {
-    const timer = setTimeout(() => fetchGames(search), 400);
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
-  }, [search, fetchGames]);
+  }, [search]);
 
-  const filteredGames = games; // server already filters
+  const { data: gamesData, isLoading: loading } = useQuery({
+    queryKey: ["games", debouncedSearch],
+    queryFn: async () => {
+      try {
+        const params: any = { limit: 100 };
+        if (debouncedSearch.trim()) params.search = debouncedSearch.trim();
+        const response = await gamesApi.getAll(params);
+        return response.data || [];
+      } catch (error) {
+        console.error(error);
+        toast.error("Failed to load games");
+        throw error;
+      }
+    }
+  });
+
+  const games = gamesData || [];
+  const filteredGames = games;
 
   const handleCreate = async (data: Omit<Game, "id">) => {
     try {
       await gamesApi.create(data);
-      await fetchGames(search);
+      queryClient.invalidateQueries({ queryKey: ["games"] });
       setModalOpen(false);
       toast.success("Game added successfully");
     } catch (error) {
+      console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to add game");
     }
   };
@@ -70,11 +68,12 @@ export default function GamesPage() {
     if (!selectedGame) return;
     try {
       await gamesApi.update(selectedGame.id || selectedGame._id || "", data);
-      await fetchGames(search);
+      queryClient.invalidateQueries({ queryKey: ["games"] });
       setSelectedGame(undefined);
       setModalOpen(false);
       toast.success("Game updated successfully");
     } catch (error) {
+      console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to update game");
     }
   };
@@ -83,11 +82,12 @@ export default function GamesPage() {
     if (!selectedGame) return;
     try {
       await gamesApi.delete(selectedGame.id || selectedGame._id || "");
-      await fetchGames(search);
+      queryClient.invalidateQueries({ queryKey: ["games"] });
       setSelectedGame(undefined);
       setDeleteOpen(false);
       toast.success("Game deleted successfully");
     } catch (error) {
+      console.error(error);
       toast.error(error instanceof Error ? error.message : "Failed to delete game");
     }
   };
@@ -152,6 +152,7 @@ export default function GamesPage() {
       >
         <GameForm
           game={selectedGame}
+          existingGames={games}
           onSubmit={
             selectedGame
               ? handleUpdate
