@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Gamepad2, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { authApi } from "../services/api";
@@ -42,7 +42,19 @@ export default function LoginPage() {
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [adminLoginComplete, setAdminLoginComplete] = useState(false);
+
+  // Agar already logged in hai to role ke mutabiq direct dashboard par bhej do
+  useEffect(() => {
+    const token = localStorage.getItem("gaming_token");
+    const role = localStorage.getItem("gaming_user_role");
+    if (token) {
+      if (role === "admin" || role === "manager" || role === "staff") {
+        navigate("/admin", { replace: true });
+      } else {
+        navigate("/user", { replace: true });
+      }
+    }
+  }, [navigate]);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value.replace(EMAIL_ALLOWED_CHARS, "");
@@ -73,7 +85,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(email, password);
       if (res.user.role === "admin" || res.user.role === "manager" || res.user.role === "staff") {
-        setAdminLoginComplete(true);
+        navigate("/admin");
       } else {
         navigate("/user");
       }
@@ -116,83 +128,66 @@ export default function LoginPage() {
           </div>
         )}
 
-        {adminLoginComplete ? (
-          <div className="space-y-4 text-center">
-            <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              Login successful. Open the admin dashboard when you are ready.
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/admin")}
-              className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(124,58,237,0.45)] transition hover:brightness-110"
-            >
-              Open Admin Dashboard
-            </button>
+        <form onSubmit={handleLogin} noValidate className="space-y-6">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-300">Email Address</label>
+            <input
+              type="email"
+              value={email}
+              onChange={handleEmailChange}
+              onBlur={() => setEmailError(validateEmail(email))}
+              maxLength={50}
+              autoComplete="email"
+              className={`${inputBase} ${emailError ? inputBad : inputOk}`}
+              placeholder="you@gmail.com"
+            />
+            {emailError && <p className="mt-1.5 text-xs text-red-300">{emailError}</p>}
           </div>
-        ) : (
-          <form onSubmit={handleLogin} noValidate className="space-y-6">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Email Address</label>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-slate-300">Password</label>
+            <div className="relative">
               <input
-                type="email"
-                value={email}
-                onChange={handleEmailChange}
-                onBlur={() => setEmailError(validateEmail(email))}
-                maxLength={50}
-                autoComplete="email"
-                className={`${inputBase} ${emailError ? inputBad : inputOk}`}
-                placeholder="you@gmail.com"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={handlePasswordChange}
+                onBlur={() => setPasswordError(validatePassword(password))}
+                maxLength={PASSWORD_MAX}
+                autoComplete="current-password"
+                className={`${inputBase} pr-12 ${passwordError ? inputBad : inputOk}`}
+                placeholder="••••••••"
               />
-              {emailError && <p className="mt-1.5 text-xs text-red-300">{emailError}</p>}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition hover:text-white"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-300">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={handlePasswordChange}
-                  onBlur={() => setPasswordError(validatePassword(password))}
-                  maxLength={PASSWORD_MAX}
-                  autoComplete="current-password"
-                  className={`${inputBase} pr-12 ${passwordError ? inputBad : inputOk}`}
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 transition hover:text-white"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-              {passwordError && <p className="mt-1.5 text-xs text-red-300">{passwordError}</p>}
-              <div className="mt-2 text-right">
-                <a href="/forgot-password" className="text-sm font-medium text-violet-300 transition hover:text-violet-200">
-                  Forgot Password?
-                </a>
-              </div>
+            {passwordError && <p className="mt-1.5 text-xs text-red-300">{passwordError}</p>}
+            <div className="mt-2 text-right">
+              <a href="/forgot-password" className="text-sm font-medium text-violet-300 transition hover:text-violet-200">
+                Forgot Password?
+              </a>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(124,58,237,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-        )}
-
-        {!adminLoginComplete && (
-          <div className="mt-6 text-center text-sm text-slate-400">
-            New player?{" "}
-            <a href="/register" className="font-semibold text-violet-300 transition hover:text-violet-200">
-              Create Account
-            </a>
           </div>
-        )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(124,58,237,0.45)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center text-sm text-slate-400">
+          New player?{" "}
+          <a href="/register" className="font-semibold text-violet-300 transition hover:text-violet-200">
+            Create Account
+          </a>
+        </div>
       </div>
     </div>
   );

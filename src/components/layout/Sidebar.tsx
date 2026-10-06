@@ -125,7 +125,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           <button
             onClick={() => {
               localStorage.removeItem("gaming_token");
-              window.location.href = "/admin/login";
+              localStorage.removeItem("gaming_user_role");
+              window.location.href = "/login";
             }}
             className="
               flex w-full items-center gap-3 rounded-lg

@@ -13,9 +13,9 @@ interface FooterProps {
 }
 
 const defaultContactDetails = {
-  email: "support@gamezone.com",
-  phone: "+92 300 1234567",
-  address: "Gaming Street, City, Country",
+  email: "saadblogger53@gmail.com",
+  phone: "+92 313 3184171",
+  address: "Hyderabad City, Pakistan",
 };
 
 export default function Footer({

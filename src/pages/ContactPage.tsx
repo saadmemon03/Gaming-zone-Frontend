@@ -45,7 +45,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h4 className="font-bold text-white mb-1">Phone Number</h4>
-                    <p className="text-slate-400 text-sm">+92 300 1234567<br />+92 21 3456789</p>
+                    <p className="text-slate-400 text-sm">+92 313 3184171<br />+92 318 2614903</p>
                   </div>
                 </div>
 
@@ -55,7 +55,7 @@ export default function ContactPage() {
                   </div>
                   <div>
                     <h4 className="font-bold text-white mb-1">Email Address</h4>
-                    <p className="text-slate-400 text-sm">support@gmail.com<br />bookings@gamezone.com</p>
+                    <p className="text-slate-400 text-sm">saadblogger53@gmail.com<br />saadblogger100@gmail.com</p>
                   </div>
                 </div>
               </div>

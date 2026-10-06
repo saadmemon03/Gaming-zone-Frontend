@@ -28,7 +28,7 @@ function AdminProtectedLayout() {
   const role = localStorage.getItem("gaming_user_role");
 
   if (!token) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // Allow admin, manager, or staff to access the admin panel
