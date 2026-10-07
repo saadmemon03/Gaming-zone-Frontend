@@ -20,6 +20,8 @@ import UserDashboard from "../pages/UserDashboard";
 import AboutPage from "../pages/AboutPage";
 import ContactPage from "../pages/ContactPage";
 import GalleryPage from "../pages/GalleryPage";
+import AdminChatPage from "../pages/AdminChatPage";
+import UserChatWidget from "../components/chat/UserChatWidget";
 import { Toaster } from "react-hot-toast";
 import AdminLayout from "../components/layout/AdminLayout";
 
@@ -83,10 +85,12 @@ export default function AppRoutes() {
           <Route path="bookings" element={<BookingsPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="customers" element={<CustomersPage />} />
+          <Route path="chat" element={<AdminChatPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/user" replace />} />
       </Routes>
+      <UserChatWidget />
     </BrowserRouter>
   );
 }

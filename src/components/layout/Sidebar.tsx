@@ -6,6 +6,7 @@ import {
   Users,
   LogOut,
   X,
+  MessageSquare,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -38,6 +39,11 @@ const navigation = [
     name: "Customers",
     icon: Users,
     path: "/admin/customers",
+  },
+  {
+    name: "Live Support / Chat",
+    icon: MessageSquare,
+    path: "/admin/chat",
   },
 ];
 

@@ -1,14 +1,32 @@
-import React from "react";
+import { useState } from "react";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
-import toast from "react-hot-toast";
 import Footer from "../components/Footer";
 import PublicNavbar from "../components/PublicNavbar";
+import toast from "react-hot-toast";
 
 export default function ContactPage() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Message sent! We will get back to you soon.");
-    (e.target as HTMLFormElement).reset();
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    setSubmitting(true);
+    setTimeout(() => {
+      setSubmitting(false);
+      toast.success("Thank you! Your message has been sent to our team.");
+      setName("");
+      setEmail("");
+      setSubject("");
+      setMessage("");
+    }, 600);
   };
 
   return (
@@ -19,7 +37,7 @@ export default function ContactPage() {
       <main className="flex-1 mx-auto max-w-7xl px-6 py-12 w-full">
         <div className="text-center mb-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
           <h1 className="text-4xl md:text-5xl font-black mb-4">Get in <span className="text-indigo-400">Touch</span></h1>
-          <p className="text-slate-400 max-w-2xl mx-auto">Have questions about our setups, want to book for a large group, or need technical support? We're here to help.</p>
+          <p className="text-slate-400 max-w-2xl mx-auto">Have questions about our setups, want to book for a large group, or need technical support? Send us a message.</p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-12 items-start animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
@@ -71,26 +89,64 @@ export default function ContactPage() {
 
           {/* Contact Form */}
           <div className="bg-[#24283b] border border-white/10 rounded-3xl p-8 shadow-xl">
-            <h3 className="text-2xl font-bold mb-6">Send us a Message</h3>
+            <h3 className="mb-2 text-2xl font-bold">Send Us a Message</h3>
+            <p className="mb-6 text-sm text-slate-400">Fill out the form below and we will get back to you shortly.</p>
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5">Full Name</label>
-                <input type="text" required className="w-full rounded-xl border border-white/10 bg-[#1f2335] px-4 py-3 text-white outline-none focus:border-indigo-400 transition-colors" placeholder="John Doe" />
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Your Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  className="w-full rounded-xl border border-white/10 bg-[#16161e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5">Email Address</label>
-                <input type="email" required className="w-full rounded-xl border border-white/10 bg-[#1f2335] px-4 py-3 text-white outline-none focus:border-indigo-400 transition-colors" placeholder="john@example.com" />
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Email Address *</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@gmail.com"
+                  className="w-full rounded-xl border border-white/10 bg-[#16161e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5">Subject</label>
-                <input type="text" required className="w-full rounded-xl border border-white/10 bg-[#1f2335] px-4 py-3 text-white outline-none focus:border-indigo-400 transition-colors" placeholder="How can we help?" />
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Subject</label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. Booking Query, Rigs Info"
+                  className="w-full rounded-xl border border-white/10 bg-[#16161e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-slate-400 mb-1.5">Message</label>
-                <textarea required rows={5} className="w-full rounded-xl border border-white/10 bg-[#1f2335] px-4 py-3 text-white outline-none focus:border-indigo-400 transition-colors resize-none" placeholder="Write your message here..."></textarea>
+                <label className="mb-1.5 block text-xs font-semibold text-slate-300">Message *</label>
+                <textarea
+                  required
+                  rows={4}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Type your message here..."
+                  className="w-full rounded-xl border border-white/10 bg-[#16161e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-none"
+                />
               </div>
-              <button type="submit" className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-3.5 font-bold text-white hover:bg-indigo-400 transition-all shadow-lg shadow-indigo-500/30">
-                <Send size={18} /> Send Message
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500 px-6 py-3.5 font-bold text-white shadow-lg shadow-indigo-500/30 transition-all hover:bg-indigo-400 disabled:opacity-50 cursor-pointer"
+              >
+                <Send size={18} />
+                {submitting ? "Sending..." : "Submit Message"}
               </button>
             </form>
           </div>

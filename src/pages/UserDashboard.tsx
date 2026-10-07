@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gamepad2, Calendar, Clock, Monitor, Tv, History, CheckCircle2, ChevronRight, MailCheck, Pizza, Coffee, Eye, EyeOff, User } from "lucide-react";
+import { Gamepad2, Calendar, Clock, Monitor, Tv, History, CheckCircle2, ChevronRight, MailCheck, Pizza, Coffee, Eye, EyeOff, User, MessageSquare } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Spline from "@splinetool/react-spline";
 import { motion } from "framer-motion";
@@ -9,6 +9,7 @@ import type { Booking, CreateBookingData } from "../types/booking";
 import toast from "react-hot-toast";
 import Footer from "../components/Footer";
 import DashboardNavbar from "../components/DashboardNavbar";
+import { OPEN_SUPPORT_CHAT_EVENT } from "../components/chat/supportChatEvents";
 
 const SNACKS_MENU = [
   { id: "s1", name: "Cold Drink", price: 100, icon: <Coffee size={20} /> },
@@ -442,6 +443,30 @@ export default function UserDashboard() {
                         );
                       })()}
                     </div>
+
+                    {/* Stat 4: Live Support / Contact Admin */}
+                    <div className="group relative overflow-hidden bg-gradient-to-br from-violet-600/15 to-indigo-600/15 hover:from-violet-600/25 hover:to-indigo-600/25 rounded-2xl p-5 border border-violet-500/30 transition-all duration-300 hover:-translate-y-1 shadow-lg">
+                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <MessageSquare size={64} className="text-violet-300" />
+                      </div>
+                      <p className="text-violet-200 text-sm font-medium mb-2 flex items-center gap-2">
+                        <MessageSquare size={16} className="text-violet-300" /> Live Admin Support
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isLoggedIn) {
+                            toast.error("Please login to chat with Admin.");
+                            setAuthModal("login");
+                            return;
+                          }
+                          window.dispatchEvent(new Event(OPEN_SUPPORT_CHAT_EVENT));
+                        }}
+                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-violet-500/30 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
+                      >
+                        <MessageSquare size={14} /> Contact Admin
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -544,13 +569,14 @@ export default function UserDashboard() {
 
                     {stations.length > itemsPerPage && (
                       <div className="mt-12 flex items-center justify-center gap-4 border-t border-white/10 pt-8">
-                        <button 
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                          className="px-6 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white font-medium hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                        >
-                          Previous
-                        </button>
+                        {currentPage > 1 && (
+                          <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            className="px-6 py-2.5 rounded-xl border border-white/10 bg-white/5 text-white font-medium transition-all hover:bg-white/10"
+                          >
+                            Previous
+                          </button>
+                        )}
                         <div className="flex items-center gap-2 text-sm">
                           <span className="text-slate-400">Page</span>
                           <span className="rounded-lg bg-indigo-400/20 px-3 py-1 font-bold text-indigo-300">{currentPage}</span>

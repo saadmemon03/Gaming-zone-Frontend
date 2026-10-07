@@ -306,3 +306,84 @@ export const bookingsApi = {
   delete: (id: string) =>
     request<ApiMessage>(`/bookings/${id}`, { method: "DELETE" }),
 };
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  CHAT
+// ═════════════════════════════════════════════════════════════════════════════
+export interface ChatMessage {
+  _id: string;
+  sender: string;
+  senderRole: "admin" | "manager" | "staff" | "user";
+  senderName: string;
+  conversationWith: string;
+  text: string;
+  encryptedPayload?: {
+    version: 1;
+    iv: string;
+    ciphertext: string;
+    senderKey: string;
+    recipientKey: string;
+  };
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface ChatPublicKey extends JsonWebKey {
+  kty: "RSA";
+  alg: "RSA-OAEP-256";
+  n: string;
+  e: string;
+  ext: true;
+  key_ops: KeyUsage[];
+}
+
+export interface ChatIdentity {
+  userId: string;
+  role: "admin" | "manager" | "staff" | "user";
+  publicKey: ChatPublicKey | null;
+  recipient: {
+    userId: string;
+    name: string;
+    publicKey: ChatPublicKey;
+  } | null;
+}
+
+export interface AdminConversation {
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+    role?: string;
+    chatPublicKey: ChatPublicKey | null;
+  };
+  lastMessage?: ChatMessage;
+  unreadCount: number;
+  createdAt?: string;
+}
+
+export const chatApi = {
+  getIdentity: () =>
+    request<{ success: boolean; data: ChatIdentity }>("/chat/identity"),
+
+  registerPublicKey: (publicKey: ChatPublicKey) =>
+    request<ApiMessage>("/chat/public-key", {
+      method: "PUT",
+      body: JSON.stringify({ publicKey }),
+    }),
+
+  createRoom: () =>
+    request<{
+      success: boolean;
+      data: {
+        roomId: string;
+        userId: string;
+        admin: { userId: string; name: string; publicKey: ChatPublicKey };
+      };
+    }>("/chat/room", { method: "POST" }),
+
+  getMessages: (userId: string) =>
+    request<{ success: boolean; data: ChatMessage[] }>(`/chat/messages/${userId}`),
+
+  getConversations: () =>
+    request<{ success: boolean; data: AdminConversation[] }>("/chat/conversations"),
+};
