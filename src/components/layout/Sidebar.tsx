@@ -41,7 +41,7 @@ const navigation = [
     path: "/admin/customers",
   },
   {
-    name: "Live Support / Chat",
+    name: "Support Chat",
     icon: MessageSquare,
     path: "/admin/chat",
   },
@@ -132,6 +132,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
             onClick={() => {
               localStorage.removeItem("gaming_token");
               localStorage.removeItem("gaming_user_role");
+              localStorage.removeItem("gaming_user_id");
+              localStorage.removeItem("gaming_user_name");
+              window.dispatchEvent(new Event("auth_changed"));
               window.location.href = "/login";
             }}
             className="

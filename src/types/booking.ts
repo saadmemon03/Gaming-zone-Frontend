@@ -9,6 +9,14 @@ export interface Booking {
   _id?: string;
 
   userId?: string;
+  user?: {
+    _id?: string;
+    id?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+    isActive?: boolean;
+  } | null;
   userName?: string;
   guestName?: string;
   contactNumber?: string;
@@ -36,6 +44,7 @@ export interface Booking {
 
   status: BookingStatus;
   bookingSource?: "Online" | "Walk-in";
+  isCustomerDeleted?: boolean;
 
   createdAt?: string;
   updatedAt?: string;

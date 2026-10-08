@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
-import { User, Clock, CreditCard, Monitor, ChevronRight, X } from "lucide-react";
-import { bookingsApi } from "../services/api";
+import { useState, useEffect, useCallback } from "react";
+import { User, Clock, CreditCard, Monitor, ChevronRight, X, Pencil, Trash2, Save } from "lucide-react";
+import { bookingsApi, usersApi } from "../services/api";
 import SearchBar from "../components/common/SearchBar";
 import Badge from "../components/ui/Badge";
+import type { Booking } from "../types/booking";
 import { toast } from "react-hot-toast";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -10,12 +11,15 @@ interface CustomerRecord {
   key: string;           // unique identifier
   name: string;
   contact: string;
+  contactNumber: string;
   isGuest: boolean;
   userId?: string;
+  guestName: string;
+  guestContact: string | null;
   totalBookings: number;
   totalSpent: number;
   lastVisit: string;
-  bookings: any[];
+  bookings: Booking[];
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -41,60 +45,120 @@ export default function CustomersPage() {
   const [selected, setSelected]       = useState<CustomerRecord | null>(null);
 
   // ── Fetch all bookings and group by customer ───────────────────────────────
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await bookingsApi.getAll({ limit: 1000 } as any);
-        const bookings: any[] = res.data || [];
+  const loadCustomers = useCallback(async () => {
+    try {
+      const res = await bookingsApi.getAll({ limit: 1000 });
+      const map = new Map<string, CustomerRecord>();
 
-        const map = new Map<string, CustomerRecord>();
+      (res.data || []).forEach((booking) => {
+        if (booking.isCustomerDeleted || booking.user?.isActive === false) return;
 
-        bookings.forEach((b) => {
-          // Determine customer key + name
-          const userId   = b.user?._id || b.user?.id || b.userId || null;
-          const name     = b.guestName || b.user?.name || b.userName || "Guest";
-          const contact  = b.contactNumber || b.user?.phone || b.user?.email || "—";
-          const isGuest  = !userId;
-          const key      = userId ?? `guest::${name}::${contact}`;
+        const userId = booking.user?._id || booking.user?.id || booking.userId;
+        const isGuest = !userId;
+        const guestName = booking.guestName || booking.userName || "Guest";
+        const guestContact = booking.contactNumber ?? null;
+        const name = isGuest
+          ? guestName
+          : booking.user?.name || booking.userName || "Member";
+        const contactNumber = isGuest
+          ? booking.contactNumber || ""
+          : booking.user?.phone || booking.contactNumber || "";
+        const contact = contactNumber || (!isGuest ? booking.user?.email || "—" : "—");
+        const key = userId ?? `guest::${guestName}::${guestContact ?? ""}`;
 
-          if (!map.has(key)) {
-            map.set(key, {
-              key, name, contact, isGuest, userId,
-              totalBookings: 0,
-              totalSpent: 0,
-              lastVisit: b.startTime,
-              bookings: [],
-            });
-          }
+        if (!map.has(key)) {
+          map.set(key, {
+            key,
+            name,
+            contact,
+            contactNumber,
+            isGuest,
+            userId,
+            guestName,
+            guestContact,
+            totalBookings: 0,
+            totalSpent: 0,
+            lastVisit: booking.startTime,
+            bookings: [],
+          });
+        }
 
-          const c = map.get(key)!;
-          c.totalBookings += 1;
-          c.totalSpent    += Number(b.amount) || 0;
-          if (new Date(b.startTime) > new Date(c.lastVisit)) {
-            c.lastVisit = b.startTime;
-          }
-          c.bookings.push(b);
-        });
+        const customer = map.get(key)!;
+        customer.totalBookings += 1;
+        customer.totalSpent += Number(booking.amount) || 0;
+        if (new Date(booking.startTime) > new Date(customer.lastVisit)) {
+          customer.lastVisit = booking.startTime;
+        }
+        customer.bookings.push(booking);
+      });
 
-        // Sort each customer's bookings newest first
-        const list = Array.from(map.values()).map((c) => ({
-          ...c,
-          bookings: c.bookings.sort(
-            (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-          ),
-        }));
-
-        // Sort customers by last visit newest first
-        list.sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime());
-        setCustomers(list);
-      } catch (err) {
-        toast.error("Failed to load customers");
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+      const list = Array.from(map.values()).map((customer) => ({
+        ...customer,
+        bookings: customer.bookings.sort(
+          (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+        ),
+      }));
+      list.sort((a, b) => new Date(b.lastVisit).getTime() - new Date(a.lastVisit).getTime());
+      setCustomers(list);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load customers");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadCustomers();
+  }, [loadCustomers]);
+
+  const handleUpdate = async (customer: CustomerRecord, name: string, contact: string) => {
+    try {
+      if (customer.isGuest) {
+        await bookingsApi.updateGuestCustomer({
+          currentName: customer.guestName,
+          currentContact: customer.guestContact,
+          name,
+          contact,
+        });
+      } else if (customer.userId) {
+        await usersApi.updateCustomer(customer.userId, { name, phone: contact });
+      } else {
+        throw new Error("Customer account could not be identified.");
+      }
+
+      toast.success("Customer details updated.");
+      setSelected(null);
+      await loadCustomers();
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Failed to update customer.");
+    }
+  };
+
+  const handleDelete = async (customer: CustomerRecord) => {
+    if (!window.confirm(`Archive ${customer.name}? Their booking history will be retained.`)) return;
+
+    try {
+      if (customer.isGuest) {
+        await bookingsApi.deleteGuestCustomer({
+          name: customer.guestName,
+          contact: customer.guestContact,
+        });
+      } else if (customer.userId) {
+        await usersApi.archiveCustomer(customer.userId);
+      } else {
+        throw new Error("Customer account could not be identified.");
+      }
+
+      toast.success("Customer archived. Booking history has been retained.");
+      setSelected(null);
+      await loadCustomers();
+    } catch (err) {
+      console.error(err);
+      toast.error(err instanceof Error ? err.message : "Failed to archive customer.");
+    }
+  };
 
   // ── Filter ────────────────────────────────────────────────────────────────
   const filtered = customers.filter((c) => {
@@ -193,7 +257,12 @@ export default function CustomersPage() {
 
       {/* History Modal */}
       {selected && (
-        <HistoryModal customer={selected} onClose={() => setSelected(null)} />
+        <HistoryModal
+          customer={selected}
+          onClose={() => setSelected(null)}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+        />
       )}
     </div>
   );
@@ -203,40 +272,66 @@ export default function CustomersPage() {
 function HistoryModal({
   customer,
   onClose,
+  onUpdate,
+  onDelete,
 }: {
   customer: CustomerRecord;
   onClose: () => void;
+  onUpdate: (customer: CustomerRecord, name: string, contact: string) => Promise<void>;
+  onDelete: (customer: CustomerRecord) => Promise<void>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(customer.name);
+  const [contact, setContact] = useState(customer.contactNumber);
+  const [saving, setSaving] = useState(false);
+
+  const saveCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim() || !contact.trim()) {
+      toast.error("Name and contact number are required.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onUpdate(customer, name.trim(), contact.trim());
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
-      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Panel */}
-      <div className="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto bg-[#1f2335] shadow-2xl">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#273449] bg-[#1f2335] px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-400/10">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${customer.name} booking history`}
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col overflow-y-auto bg-[#1f2335] shadow-2xl"
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[#273449] bg-[#1f2335] px-4 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-400/10">
               <User size={18} className="text-indigo-300" />
             </div>
-            <div>
-              <p className="font-semibold text-white">{customer.name}</p>
-              <p className="text-xs text-slate-500">{customer.contact}</p>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-white">{customer.name}</p>
+              <p className="truncate text-xs text-slate-500">{customer.contact}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-[#151C2C] hover:text-white"
+            aria-label="Close customer details"
+            className="shrink-0 rounded-lg p-2 text-slate-400 hover:bg-[#151C2C] hover:text-white"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Summary cards */}
         <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-3 sm:p-6">
           <MiniCard
             icon={<Clock size={16} className="text-indigo-300" />}
@@ -255,38 +350,91 @@ function HistoryModal({
           />
         </div>
 
-        {/* Booking history */}
-        <div className="px-6 pb-8">
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Booking History
-          </h3>
+        <div className="px-4 pb-6 sm:px-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+              Booking History
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setEditing((value) => !value)}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-indigo-400/30 px-3 py-2 text-sm font-medium text-indigo-200 transition hover:bg-indigo-400/10"
+              >
+                <Pencil size={15} />
+                {editing ? "Cancel edit" : "Edit"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDelete(customer)}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-rose-400/30 px-3 py-2 text-sm font-medium text-rose-300 transition hover:bg-rose-400/10"
+              >
+                <Trash2 size={15} />
+                Archive
+              </button>
+            </div>
+          </div>
+
+          {editing && (
+            <form onSubmit={saveCustomer} className="mb-6 space-y-4 rounded-xl border border-[#273449] bg-[#151C2C] p-4">
+              <label className="block text-sm font-medium text-slate-300">
+                Name
+                <input
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                  className="mt-1.5 w-full rounded-lg border border-[#273449] bg-[#1f2335] px-3 py-2.5 text-base text-white outline-none focus:border-indigo-400"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-300">
+                Contact Number
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  value={contact}
+                  onChange={(event) => setContact(event.target.value)}
+                  required
+                  className="mt-1.5 w-full rounded-lg border border-[#273449] bg-[#1f2335] px-3 py-2.5 text-base text-white outline-none focus:border-indigo-400"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 py-2.5 font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Save size={16} />
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </form>
+          )}
 
           {customer.bookings.length === 0 ? (
             <p className="text-slate-500">No bookings found.</p>
           ) : (
             <div className="space-y-3">
-              {customer.bookings.map((b: any, i: number) => (
+              {customer.bookings.map((b, i) => (
                 <div
                   key={b._id || b.id || i}
                   className="rounded-xl border border-[#273449] bg-[#151C2C] p-4"
                 >
-                  {/* Top row */}
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-white">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold text-white">
                         {b.station?.name || b.stationName || "Unknown Station"}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {b.game?.name || b.gameName || "No game selected"}
+                      <p className="mt-0.5 break-words text-xs text-slate-500">
+                        {(typeof b.game === "object" ? b.game?.name : undefined) ||
+                          b.gameName ||
+                          "No game selected"}
                       </p>
                     </div>
-                    <Badge variant={statusVariant(b.status)}>
-                      {b.status}
-                    </Badge>
+                    <span className="shrink-0">
+                      <Badge variant={statusVariant(b.status)}>{b.status}</Badge>
+                    </span>
                   </div>
 
-                  {/* Details */}
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
                     <div>
                       <span className="text-slate-500">Start </span>
                       <span className="text-slate-300">{formatDate(b.startTime)}</span>
@@ -297,11 +445,10 @@ function HistoryModal({
                     </div>
                   </div>
 
-                  {/* Amount */}
                   <div className="mt-3 flex items-center justify-between border-t border-[#273449] pt-3">
                     <span className="text-xs text-slate-500">Amount</span>
                     <span className="text-sm font-bold text-white">
-                      Rs. {Number(b.amount).toLocaleString()}
+                      Rs. {Number(b.amount || 0).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -309,7 +456,7 @@ function HistoryModal({
             </div>
           )}
         </div>
-      </div>
+      </section>
     </>
   );
 }

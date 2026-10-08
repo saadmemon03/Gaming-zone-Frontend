@@ -1,19 +1,14 @@
 import { useState, useEffect } from "react";
 import { Gamepad2, Eye, EyeOff } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { authApi } from "../services/api";
 
 // ---------- Validation helpers ----------
-const EMAIL_ALLOWED_CHARS = /[^a-zA-Z0-9@._%+-]/g;
 const EMAIL_FORMAT = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/;
-
-const PASSWORD_MIN = 8;
-const PASSWORD_MAX = 32;
 
 const validateEmail = (value: string): string => {
   if (!value) return "Email is required";
   const trimmed = value.trim().toLowerCase();
-  if (trimmed.length > 50) return "Email must be at most 50 characters";
   if ((trimmed.match(/@/g) || []).length !== 1) return "Email must contain exactly one @";
   if (trimmed.includes("..")) return "Email cannot contain consecutive dots";
   if (!EMAIL_FORMAT.test(trimmed)) return "Enter a valid email address (e.g. user@example.com)";
@@ -22,19 +17,13 @@ const validateEmail = (value: string): string => {
 
 const validatePassword = (value: string): string => {
   if (!value) return "Password is required";
-  if (/\s/.test(value)) return "Password cannot contain spaces";
-  if (value.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters`;
-  if (value.length > PASSWORD_MAX) return `Password must be at most ${PASSWORD_MAX} characters`;
-  if (!/[A-Z]/.test(value)) return "Password must contain at least 1 uppercase letter (A-Z)";
-  if (!/[a-z]/.test(value)) return "Password must contain at least 1 lowercase letter (a-z)";
-  if (!/[0-9]/.test(value)) return "Password must contain at least 1 number (0-9)";
-  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(value))
-    return "Password must contain at least 1 special character/sign (e.g. @, #, $, !)";
   return "";
 };
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const adminLogin = location.pathname === "/admin/login";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -43,10 +32,9 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Agar already logged in hai to role ke mutabiq direct dashboard par bhej do
   useEffect(() => {
     const token = localStorage.getItem("gaming_token");
-    const role = localStorage.getItem("gaming_user_role");
+    const role = localStorage.getItem("gaming_user_role")?.toLowerCase();
     if (token) {
       if (role === "admin" || role === "manager" || role === "staff") {
         navigate("/admin", { replace: true });
@@ -57,16 +45,13 @@ export default function LoginPage() {
   }, [navigate]);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(EMAIL_ALLOWED_CHARS, "");
-    if (val.length > 50) val = val.substring(0, 50);
+    const val = e.target.value;
     setEmail(val);
     if (emailError) setEmailError(validateEmail(val));
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // spaces remove + max length
-    let val = e.target.value.replace(/\s/g, "");
-    if (val.length > PASSWORD_MAX) val = val.substring(0, PASSWORD_MAX);
+    const val = e.target.value;
     setPassword(val);
     if (passwordError) setPasswordError(validatePassword(val));
   };
@@ -86,11 +71,14 @@ export default function LoginPage() {
       const res = await authApi.login(email, password);
       if (res.user.role === "admin" || res.user.role === "manager" || res.user.role === "staff") {
         navigate("/admin");
+      } else if (adminLogin) {
+        authApi.logout();
+        setError("This account does not have admin access.");
       } else {
         navigate("/user");
       }
-    } catch (err: any) {
-      const message = err.message || "Failed to login";
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to login";
 
       if (message.toLowerCase().includes("verify") || message.toLowerCase().includes("otp")) {
         navigate("/verify-otp", { state: { email } });
@@ -119,7 +107,9 @@ export default function LoginPage() {
             <Gamepad2 size={32} />
           </div>
           <h1 className="text-3xl font-black tracking-tight">GameZone</h1>
-          <p className="mt-2 text-sm text-slate-300">Sign in to continue your next match</p>
+          <p className="mt-2 text-sm text-slate-300">
+            {adminLogin ? "Admin sign in" : "Sign in to continue your next match"}
+          </p>
         </div>
 
         {error && (
@@ -136,7 +126,7 @@ export default function LoginPage() {
               value={email}
               onChange={handleEmailChange}
               onBlur={() => setEmailError(validateEmail(email))}
-              maxLength={50}
+              maxLength={254}
               autoComplete="email"
               className={`${inputBase} ${emailError ? inputBad : inputOk}`}
               placeholder="you@gmail.com"
@@ -152,7 +142,6 @@ export default function LoginPage() {
                 value={password}
                 onChange={handlePasswordChange}
                 onBlur={() => setPasswordError(validatePassword(password))}
-                maxLength={PASSWORD_MAX}
                 autoComplete="current-password"
                 className={`${inputBase} pr-12 ${passwordError ? inputBad : inputOk}`}
                 placeholder="••••••••"
@@ -182,12 +171,14 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-sm text-slate-400">
-          New player?{" "}
-          <a href="/register" className="font-semibold text-violet-300 transition hover:text-violet-200">
-            Create Account
-          </a>
-        </div>
+        {!adminLogin && (
+          <div className="mt-6 text-center text-sm text-slate-400">
+            New player?{" "}
+            <a href="/register" className="font-semibold text-violet-300 transition hover:text-violet-200">
+              Create Account
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

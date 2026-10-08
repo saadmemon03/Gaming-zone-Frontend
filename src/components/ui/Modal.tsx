@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { X, ArrowLeft } from "lucide-react";
 
 interface ModalProps {
   isOpen: boolean;
@@ -25,27 +25,17 @@ export default function Modal({
       }
     };
 
-    document.addEventListener(
-      "keydown",
-      handleEscape
-    );
-
+    document.addEventListener("keydown", handleEscape);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     return () => {
-      document.removeEventListener(
-        "keydown",
-        handleEscape
-      );
-
+      document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = previousOverflow;
     };
   }, [isOpen, onClose]);
 
-  if (!isOpen) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   const sizes = {
     sm: "max-w-sm",
@@ -56,44 +46,19 @@ export default function Modal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Overlay */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
-      <div
-        className={`
-          relative z-10 max-h-[calc(100dvh-2rem)] w-full overflow-y-auto
-          ${sizes[size]}
-          rounded-xl
-          border border-[#273449]
-          bg-[#151C2C]
-          shadow-2xl
-        `}
-      >
+      <div className={`relative z-10 max-h-[calc(100dvh-2rem)] w-full overflow-y-auto ${sizes[size]} rounded-xl border border-[#273449] bg-[#151C2C] shadow-2xl`}>
         {/* Header */}
-        <div
-          className="
-            flex items-center justify-between
-            border-b border-[#273449]
-            px-4 py-3 sm:px-5 sm:py-4
-          "
-        >
-          <h2 className="text-lg font-semibold text-white">
-            {title}
-          </h2>
+        <div className="flex items-center justify-between border-b border-[#273449] px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex items-center gap-3">
+            <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-[#1f2335] hover:text-white transition-colors">
+              <ArrowLeft size={18} />
+            </button>
+            <h2 className="text-lg font-semibold text-white">{title}</h2>
+          </div>
 
-          <button
-            onClick={onClose}
-            className="
-              rounded-lg p-2
-              text-slate-400
-              hover:bg-[#1f2335]
-              hover:text-white
-            "
-          >
+          <button onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-[#1f2335] hover:text-white transition-colors">
             <X size={18} />
           </button>
         </div>

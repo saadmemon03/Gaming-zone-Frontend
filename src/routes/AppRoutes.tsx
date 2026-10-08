@@ -27,13 +27,12 @@ import AdminLayout from "../components/layout/AdminLayout";
 
 function AdminProtectedLayout() {
   const token = localStorage.getItem("gaming_token");
-  const role = localStorage.getItem("gaming_user_role");
+  const role = localStorage.getItem("gaming_user_role")?.toLowerCase();
 
   if (!token) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/admin/login" replace />;
   }
 
-  // Allow admin, manager, or staff to access the admin panel
   if (role !== "admin" && role !== "manager" && role !== "staff") {
     return <Navigate to="/user" replace />;
   }
@@ -45,37 +44,27 @@ function AdminProtectedLayout() {
   );
 }
 
-function UserProtectedLayout() {
-  const token = localStorage.getItem("gaming_token");
-  if (!token) {
-    return <Navigate to="/login" replace />;
-  }
-  return <Outlet />;
-}
-
 export default function AppRoutes() {
   return (
     <BrowserRouter>
       <Toaster position="top-right" />
       <Routes>
-        {/* Redirect Root to User Page */}
+        {/* The public user site is the default landing page. */}
         <Route path="/" element={<Navigate to="/user" replace />} />
         
         {/* Public / Common Login */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/admin/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/verify-otp" element={<VerifyOTPPage />} />
         <Route path="/verify-email" element={<VerifyOTPPage />} />
-        <Route path="/admin/login" element={<Navigate to="/login" replace />} />
 
-        {/* Protected User Pages */}
-        <Route element={<UserProtectedLayout />}>
-          <Route path="/user" element={<UserDashboard />} />
-          <Route path="/about" element={<AboutPage />} />
-          <Route path="/contact" element={<ContactPage />} />
-          <Route path="/gallery" element={<GalleryPage />} />
-        </Route>
+        {/* User site is open by default; booking/account actions handle sign-in in the UI. */}
+        <Route path="/user" element={<UserDashboard />} />
+        <Route path="/about" element={<AboutPage />} />
+        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/gallery" element={<GalleryPage />} />
 
         {/* Admin System */}
         <Route path="/admin" element={<AdminProtectedLayout />}>

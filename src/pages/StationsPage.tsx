@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Clock3, Monitor } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { stationsApi, bookingsApi } from "../services/api";
+import { getApiErrorMessage, stationsApi, bookingsApi } from "../services/api";
 import { toast } from "react-hot-toast";
 import type { Station } from "../types/Station";
 import type { Booking } from "../types/booking";
@@ -29,7 +29,7 @@ const StationsPage = () => {
         return res.data || [];
       } catch (err) {
         console.error(err);
-        toast.error("Failed to load stations");
+        toast.error(getApiErrorMessage(err, "Failed to load stations"));
         throw err;
       }
     }

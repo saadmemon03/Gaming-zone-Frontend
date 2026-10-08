@@ -1,218 +1,513 @@
 import { useState } from "react";
-import { Monitor, CalendarCheck, DollarSign, Users, Plus, Edit, Trash2 } from "lucide-react";
+import { Clock3, Monitor } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { dashboardApi, stationsApi } from "../services/api";
+import { getApiErrorMessage, stationsApi, bookingsApi } from "../services/api";
 import { toast } from "react-hot-toast";
 
+import type { Station } from "../types/Station";
+import type { Booking } from "../types/booking";
+
 import Modal from "../components/ui/Modal";
-import StationForm from "../components/stations/StationForm";
-import ConfirmDialog from "../components/common/ConfirmDialog";
+import StationTimeSlotsModal from "../components/stations/StationTimeSlotsModal";
+import BookingForm from "../components/bookings/BookingForm";
 import SearchBar from "../components/common/SearchBar";
 
-export default function DashboardPage() {
+const StationsPage = () => {
   const queryClient = useQueryClient();
+
   const [search, setSearch] = useState("");
-  
-  // Add/Edit Station Modal state
-  const [isAddStationOpen, setIsAddStationOpen] = useState(false);
-  const [editingStation, setEditingStation] = useState<any>(null);
 
-  // Delete Station state
-  const [deleteStationId, setDeleteStationId] = useState<string | null>(null);
+  // ================================
+  // Time Slots & Booking State
+  // ================================
+  const [timeSlotsStation, setTimeSlotsStation] = useState<
+    Station | undefined
+  >();
 
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["dashboardStats"],
-    queryFn: async () => {
-      try {
-        const res = await dashboardApi.getStats();
-        return res.data;
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load dashboard stats");
-        throw err;
-      }
-    }
-  });
+  const [bookingStationId, setBookingStationId] = useState<
+    string | undefined
+  >();
 
-  const { data: stationsData, isLoading: stationsLoading } = useQuery({
+  const [bookingStartTime, setBookingStartTime] = useState<
+    Date | undefined
+  >();
+
+  const [editingBooking, setEditingBooking] = useState<
+    Booking | undefined
+  >();
+
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+
+  // ================================
+  // Separate Error States
+  // ================================
+  const [bookingCreateError, setBookingCreateError] = useState("");
+  const [bookingUpdateError, setBookingUpdateError] = useState("");
+
+  // ================================
+  // Get Stations
+  // ================================
+  const {
+    data: stationsData,
+    isLoading: stationsLoading,
+    isError: stationsIsError,
+    error: stationsError,
+  } = useQuery({
     queryKey: ["stations"],
+
     queryFn: async () => {
-      try {
-        const res = await stationsApi.getAll();
-        return res.data || [];
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to load stations");
-        throw err;
-      }
-    }
+      const res = await stationsApi.getAll();
+      return res.data || [];
+    },
   });
 
-  const stations = stationsData || [];
-  const loading = statsLoading || stationsLoading;
+  const stations: Station[] = stationsData || [];
 
-  const handleSaveStation = async (data: any) => {
-    try {
-      if (editingStation) {
-        await stationsApi.update(editingStation.id || editingStation._id, data);
-        toast.success("Station updated successfully!");
-      } else {
-        await stationsApi.create(data);
-        toast.success("Station created successfully!");
-      }
-      setIsAddStationOpen(false);
-      setEditingStation(null);
-      queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to save station");
-    }
-  };
+  // ================================
+  // Station Error Message
+  // ================================
+  const stationErrorMessage = stationsIsError
+    ? getApiErrorMessage(stationsError, "Failed to load stations")
+    : "";
 
-  const handleDeleteStation = async () => {
-    if (!deleteStationId) return;
-    try {
-      await stationsApi.delete(deleteStationId);
-      toast.success("Station deleted successfully!");
-      setDeleteStationId(null);
-      queryClient.invalidateQueries({ queryKey: ["dashboardStats"] });
-      queryClient.invalidateQueries({ queryKey: ["stations"] });
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err.message || "Failed to delete station");
-    }
-  };
-
-  const filteredStations = stations.filter(s => 
-    s.name.toLowerCase().includes(search.toLowerCase())
+  // ================================
+  // Filter Stations
+  // ================================
+  const filteredStations = stations.filter((station) =>
+    station.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) {
-    return <p className="text-slate-400">Loading dashboard...</p>;
-  }
+  // ================================
+  // Booking Submit
+  // ================================
+  const handleBookingSubmit = async (data: any) => {
+    // Reset previous errors
+    setBookingCreateError("");
+    setBookingUpdateError("");
+
+    try {
+      // ============================
+      // Update Booking
+      // ============================
+      if (editingBooking) {
+        try {
+          await bookingsApi.update(editingBooking.id, data);
+
+          toast.success("Booking updated successfully!");
+
+          setIsBookingModalOpen(false);
+          setEditingBooking(undefined);
+
+          await queryClient.invalidateQueries({
+            queryKey: ["stations"],
+          });
+        } catch (error) {
+          console.error("Update Booking Error:", error);
+
+          const message = getApiErrorMessage(
+            error,
+            "Failed to update booking"
+          );
+
+          setBookingUpdateError(message);
+          toast.error(message);
+
+          return;
+        }
+
+        return;
+      }
+
+      // ============================
+      // Create Booking
+      // ============================
+      try {
+        await bookingsApi.create(data);
+
+        toast.success("Booking created successfully!");
+
+        setIsBookingModalOpen(false);
+        setEditingBooking(undefined);
+
+        await queryClient.invalidateQueries({
+          queryKey: ["stations"],
+        });
+      } catch (error) {
+        console.error("Create Booking Error:", error);
+
+        const message = getApiErrorMessage(
+          error,
+          "Failed to create booking"
+        );
+
+        setBookingCreateError(message);
+        toast.error(message);
+
+        return;
+      }
+    } catch (error) {
+      console.error("Booking Error:", error);
+
+      toast.error("Something went wrong with booking");
+    }
+  };
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-6">
+
+      {/* ================================
+          Header
+      ================================= */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="mt-1 text-sm text-slate-500">Welcome back! Here's what's happening today.</p>
+          <h1 className="text-2xl font-bold text-white">
+            Gaming Stations
+          </h1>
+
+          <p className="mt-1 text-sm text-[#64748B]">
+            Select a station to create a new booking.
+          </p>
         </div>
-        <button
-          onClick={() => {
-            setEditingStation(null);
-            setIsAddStationOpen(true);
-          }}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#7C3AED] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#6D28D9] sm:w-auto"
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          Add Station
-        </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard icon={<Monitor size={22} className="text-indigo-300" />} label="Total Stations" value={stats?.totalStations ?? 0} color="bg-indigo-400/10" />
-        <StatCard icon={<CalendarCheck size={22} className="text-rose-300" />} label="Total Bookings" value={stats?.totalBookings ?? 0} color="bg-rose-400/10" />
-        <StatCard icon={<DollarSign size={22} className="text-green-400" />} label="Total Revenue" value={`Rs. ${(stats?.totalRevenue ?? 0).toLocaleString()}`} color="bg-green-500/10" isText />
-        <StatCard icon={<Users size={22} className="text-orange-400" />} label="Total Users" value={stats?.totalUsers ?? 0} color="bg-orange-500/10" />
+      {/* ================================
+          Stations API Error
+      ================================= */}
+      {stationsIsError && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">
+          <p className="text-sm font-medium text-red-400">
+            Failed to load stations
+          </p>
+
+          <p className="mt-1 text-sm text-red-300">
+            {stationErrorMessage}
+          </p>
+
+          <button
+            type="button"
+            onClick={() =>
+              queryClient.invalidateQueries({
+                queryKey: ["stations"],
+              })
+            }
+            className="mt-3 rounded-lg bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 hover:bg-red-500/20"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* ================================
+          Stats
+      ================================= */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StationStat
+          title="Total Stations"
+          value={stations.length.toString()}
+        />
+
+        <StationStat
+          title="Available"
+          value={stations
+            .filter((s) => s.status === "Available")
+            .length.toString()}
+          color="text-green-400"
+        />
+
+        <StationStat
+          title="Occupied"
+          value={stations
+            .filter((s) => s.status === "Occupied")
+            .length.toString()}
+          color="text-indigo-300"
+        />
+
+        <StationStat
+          title="Maintenance"
+          value={stations
+            .filter((s) => s.status === "Maintenance")
+            .length.toString()}
+          color="text-yellow-400"
+        />
       </div>
 
-      <SearchBar 
-        value={search} 
-        onChange={setSearch} 
-        placeholder="Search stations by name..." 
+      {/* ================================
+          Search
+      ================================= */}
+      <SearchBar
+        value={search}
+        onChange={setSearch}
+        placeholder="Search stations by name..."
       />
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {filteredStations.length === 0 ? (
-          <p className="text-slate-500">No stations found.</p>
-        ) : (
-          filteredStations.map((station) => (
-            <div
-              key={station._id || station.id}
-              className="rounded-2xl border border-[#273449] bg-[#151C2C] p-5 transition hover:border-[#7C3AED]/50"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-400/10">
-                    <Monitor size={22} className="text-indigo-300" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-white">{station.name}</h3>
-                  </div>
-                </div>
-              </div>
+      {/* ================================
+          Loading
+      ================================= */}
+      {stationsLoading && (
+        <div className="rounded-xl border border-[#273449] bg-[#151C2C] p-6">
+          <p className="text-sm text-slate-400">
+            Loading stations...
+          </p>
+        </div>
+      )}
 
-              <div className="mt-5 space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-[#64748B]">Price</span>
-                  <span className="text-sm font-semibold text-white">Rs. {station.hourlyRate}/hr</span>
-                </div>
-              </div>
+      {/* ================================
+          Station List
+      ================================= */}
+      {!stationsLoading && !stationsIsError && (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
 
-              <div className="mt-5 flex items-center justify-between border-t border-[#273449] pt-4">
-                <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  station.status === 'Available' ? 'bg-green-500/10 text-green-400' :
-                  station.status === 'Occupied' ? 'bg-indigo-400/10 text-indigo-300' :
-                  station.status === 'Reserved' ? 'bg-rose-400/10 text-rose-300' :
-                  'bg-yellow-500/10 text-yellow-400'
-                }`}>
-                  {station.status}
-                </span>
-                
-                <div className="flex gap-2">
-                  <button onClick={() => { setEditingStation(station); setIsAddStationOpen(true); }} className="rounded-lg bg-[#1B2435] p-2 text-rose-300 hover:bg-rose-400/10">
-                    <Edit size={16} />
-                  </button>
-                  <button onClick={() => setDeleteStationId(station._id || station.id)} className="rounded-lg bg-[#1B2435] p-2 text-red-400 hover:bg-red-500/10">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
+          {filteredStations.length === 0 ? (
+            <div className="col-span-full rounded-xl border border-[#273449] bg-[#151C2C] p-8 text-center">
+              <p className="text-slate-400">
+                No stations found.
+              </p>
             </div>
-          ))
-        )}
-      </div>
+          ) : (
+            filteredStations.map((station) => (
+              <div
+                key={(station.id || station._id) as string}
+                className="rounded-2xl border border-[#273449] bg-[#151C2C] p-5 transition hover:border-[#7C3AED]/50"
+              >
 
-      {/* Add/Edit Station Modal */}
-      <Modal isOpen={isAddStationOpen} onClose={() => { setIsAddStationOpen(false); setEditingStation(null); }} title={editingStation ? "Edit Station" : "Add Station"}>
-        <StationForm existingStations={stations} station={editingStation} onSubmit={handleSaveStation} onCancel={() => { setIsAddStationOpen(false); setEditingStation(null); }} />
+                {/* Station Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-400/10">
+                      <Monitor
+                        size={22}
+                        className="text-indigo-300"
+                      />
+                    </div>
+
+                    <div>
+                      <h3 className="font-semibold text-white">
+                        {station.name}
+                      </h3>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Price */}
+                <div className="mt-5 space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-[#64748B]">
+                      Price
+                    </span>
+
+                    <span className="text-sm font-semibold text-white">
+                      Rs. {station.hourlyRate}/hr
+                    </span>
+                  </div>
+                </div>
+
+                {/* Available Hours */}
+                <button
+                  type="button"
+                  onClick={() => setTimeSlotsStation(station)}
+                  className="mt-4 flex w-full items-center gap-3 rounded-lg border border-[#273449] bg-[#101827] px-3 py-3 text-left hover:border-[#7C3AED]/60"
+                >
+                  <Clock3
+                    size={17}
+                    className="shrink-0 text-green-400"
+                  />
+
+                  <span>
+                    <span className="block text-sm font-medium text-white">
+                      Available hours
+                    </span>
+
+                    <span className="block text-xs text-slate-500">
+                      Choose a time to book
+                    </span>
+                  </span>
+                </button>
+
+                {/* Status */}
+                <div className="mt-5 flex items-center justify-between border-t border-[#273449] pt-4">
+                  <StatusBadge status={station.status} />
+                </div>
+
+              </div>
+            ))
+          )}
+
+        </div>
+      )}
+
+      {/* ================================
+          Time Slots Modal
+      ================================= */}
+      <Modal
+        isOpen={!!timeSlotsStation}
+        onClose={() => setTimeSlotsStation(undefined)}
+        title="Select Time Slot"
+      >
+        {timeSlotsStation && (
+          <StationTimeSlotsModal
+            station={timeSlotsStation}
+
+            onEditBooking={(booking) => {
+              setBookingCreateError("");
+              setBookingUpdateError("");
+
+              setEditingBooking(booking);
+
+              setBookingStationId(
+                (timeSlotsStation.id ||
+                  timeSlotsStation._id) as string
+              );
+
+              setBookingStartTime(
+                new Date(booking.startTime)
+              );
+
+              setTimeSlotsStation(undefined);
+              setIsBookingModalOpen(true);
+            }}
+
+            onBookSlot={(time) => {
+              setBookingCreateError("");
+              setBookingUpdateError("");
+
+              setEditingBooking(undefined);
+
+              setBookingStationId(
+                (timeSlotsStation.id ||
+                  timeSlotsStation._id) as string
+              );
+
+              setTimeSlotsStation(undefined);
+
+              setBookingStartTime(time);
+
+              setIsBookingModalOpen(true);
+            }}
+          />
+        )}
       </Modal>
 
-      {/* Delete Confirm */}
-      <ConfirmDialog
-        isOpen={!!deleteStationId}
-        onClose={() => setDeleteStationId(null)}
-        onConfirm={handleDeleteStation}
-        title="Delete Station"
-        message="Are you sure you want to delete this station?"
-        confirmText="Delete"
-        confirmVariant="danger"
-      />
-    </div>
-  );
-}
+      {/* ================================
+          Booking Modal
+      ================================= */}
+      <Modal
+        isOpen={isBookingModalOpen}
+        onClose={() => {
+          setIsBookingModalOpen(false);
+          setEditingBooking(undefined);
+          setBookingCreateError("");
+          setBookingUpdateError("");
+        }}
+        title={
+          editingBooking
+            ? "Edit Booking"
+            : "New Booking"
+        }
+      >
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
-function StatCard({
-  icon, label, value, color, isText = false
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number | string;
-  color: string;
-  isText?: boolean;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#273449] bg-[#151C2C] p-5">
-      <div className={`mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl ${color}`}>
-        {icon}
-      </div>
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={`mt-1 font-bold text-white ${isText ? "text-lg" : "text-2xl"}`}>{value}</p>
+        {/* Create Booking Error */}
+        {!editingBooking && bookingCreateError && (
+          <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+            <p className="text-sm font-medium text-red-400">
+              Booking Creation Error
+            </p>
+
+            <p className="mt-1 text-sm text-red-300">
+              {bookingCreateError}
+            </p>
+          </div>
+        )}
+
+        {/* Update Booking Error */}
+        {editingBooking && bookingUpdateError && (
+          <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3">
+            <p className="text-sm font-medium text-red-400">
+              Booking Update Error
+            </p>
+
+            <p className="mt-1 text-sm text-red-300">
+              {bookingUpdateError}
+            </p>
+          </div>
+        )}
+
+        <BookingForm
+          initialStationId={bookingStationId}
+          initialStartTime={bookingStartTime?.toISOString()}
+          initialBooking={editingBooking}
+
+          onSubmit={handleBookingSubmit}
+
+          onCancel={() => {
+            setIsBookingModalOpen(false);
+            setEditingBooking(undefined);
+            setBookingCreateError("");
+            setBookingUpdateError("");
+          }}
+        />
+
+      </Modal>
     </div>
   );
-}
+};
+
+// ========================================
+// Station Stat
+// ========================================
+const StationStat = ({
+  title,
+  value,
+  color = "text-white",
+}: {
+  title: string;
+  value: string;
+  color?: string;
+}) => (
+  <div className="rounded-2xl border border-[#273449] bg-[#151C2C] p-5">
+    <p className="text-sm text-[#64748B]">
+      {title}
+    </p>
+
+    <p className={`mt-2 text-2xl font-bold ${color}`}>
+      {value}
+    </p>
+  </div>
+);
+
+// ========================================
+// Status Badge
+// ========================================
+const StatusBadge = ({
+  status,
+}: {
+  status: string;
+}) => {
+  const styles: Record<string, string> = {
+    Available:
+      "bg-green-500/10 text-green-400",
+
+    Occupied:
+      "bg-indigo-400/10 text-indigo-300",
+
+    Reserved:
+      "bg-rose-400/10 text-rose-300",
+
+    Maintenance:
+      "bg-yellow-500/10 text-yellow-400",
+  };
+
+  return (
+    <span
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        styles[status] ||
+        "bg-slate-500/10 text-slate-400"
+      }`}
+    >
+      {status}
+    </span>
+  );
+};
+
+export default StationsPage;

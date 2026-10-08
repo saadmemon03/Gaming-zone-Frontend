@@ -20,12 +20,26 @@ const getFormattedBaseUrl = (url: string) => {
   return formatted.endsWith("/") ? formatted.slice(0, -1) : formatted;
 };
 
-const BASE_URL = getFormattedBaseUrl(rawUrl);
+export const API_BASE_URL = getFormattedBaseUrl(rawUrl);
+
+const NO_RESPONSE_MESSAGE =
+  "No response received from the server. Please check your internet connection or try again later.";
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof TypeError) return NO_RESPONSE_MESSAGE;
+  return error instanceof Error && error.message ? error.message : fallback;
+}
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 function getToken(): string {
   return localStorage.getItem("gaming_token") ?? "";
 }
+
+export function getAuthToken(): string {
+  return getToken();
+}
+
+export const SOCKET_URL = new URL(API_BASE_URL).origin;
 
 function saveToken(token: string): void {
   localStorage.setItem("gaming_token", token);
@@ -33,6 +47,10 @@ function saveToken(token: string): void {
 
 function clearToken(): void {
   localStorage.removeItem("gaming_token");
+  localStorage.removeItem("gaming_user_id");
+  localStorage.removeItem("gaming_user_name");
+  localStorage.removeItem("gaming_user_role");
+  window.dispatchEvent(new Event("auth_changed"));
 }
 
 function createQueryString(params?: Record<string, unknown>): string {
@@ -56,7 +74,7 @@ export async function request<T>(
 
   const formattedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
-  const res = await fetch(`${BASE_URL}${formattedEndpoint}`, { ...options, headers });
+  const res = await fetch(`${API_BASE_URL}${formattedEndpoint}`, { ...options, headers });
 
   let data: any;
   try {
@@ -66,13 +84,13 @@ export async function request<T>(
   }
 
   if (!res.ok) {
-    if (res.status === 401 || res.status === 403) {
-      clearToken();
+    if (res.status === 401) {
       const role = localStorage.getItem("gaming_user_role");
-      if (role === "admin" || role === "manager" || role === "staff") {
+      clearToken();
+      if (role === "admin") {
         window.location.href = "/admin/login";
       } else {
-        window.dispatchEvent(new Event("auth_unauthorized"));
+        window.location.href = "/login";
       }
     }
     throw new Error(data?.message ?? "Something went wrong");
@@ -111,6 +129,8 @@ export const authApi = {
     });
     saveToken(data.token);
     localStorage.setItem("gaming_user_role", data.user.role || "user");
+    localStorage.setItem("gaming_user_id", data.user._id || "");
+    localStorage.setItem("gaming_user_name", data.user.name || "");
     window.dispatchEvent(new Event("auth_changed"));
     return data;
   },
@@ -137,8 +157,6 @@ export const authApi = {
 
   logout: () => {
     clearToken();
-    localStorage.removeItem("gaming_user_role");
-    window.dispatchEvent(new Event("auth_changed"));
   },
 
   forgotPassword: (email: string) =>
@@ -275,6 +293,15 @@ export const usersApi = {
 
   delete: (id: string) =>
     request<ApiMessage>(`/users/${id}`, { method: "DELETE" }),
+
+  updateCustomer: (id: string, data: { name: string; phone: string }) =>
+    request<ApiResponse<User>>(`/users/${id}/customer`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  archiveCustomer: (id: string) =>
+    request<ApiMessage>(`/users/${id}/customer`, { method: "DELETE" }),
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -305,85 +332,24 @@ export const bookingsApi = {
 
   delete: (id: string) =>
     request<ApiMessage>(`/bookings/${id}`, { method: "DELETE" }),
-};
 
-// ═════════════════════════════════════════════════════════════════════════════
-//  CHAT
-// ═════════════════════════════════════════════════════════════════════════════
-export interface ChatMessage {
-  _id: string;
-  sender: string;
-  senderRole: "admin" | "manager" | "staff" | "user";
-  senderName: string;
-  conversationWith: string;
-  text: string;
-  encryptedPayload?: {
-    version: 1;
-    iv: string;
-    ciphertext: string;
-    senderKey: string;
-    recipientKey: string;
-  };
-  isRead: boolean;
-  createdAt: string;
-}
-
-export interface ChatPublicKey extends JsonWebKey {
-  kty: "RSA";
-  alg: "RSA-OAEP-256";
-  n: string;
-  e: string;
-  ext: true;
-  key_ops: KeyUsage[];
-}
-
-export interface ChatIdentity {
-  userId: string;
-  role: "admin" | "manager" | "staff" | "user";
-  publicKey: ChatPublicKey | null;
-  recipient: {
-    userId: string;
+  updateGuestCustomer: (data: {
+    currentName: string;
+    currentContact: string | null;
     name: string;
-    publicKey: ChatPublicKey;
-  } | null;
-}
-
-export interface AdminConversation {
-  user: {
-    _id: string;
-    name: string;
-    email: string;
-    role?: string;
-    chatPublicKey: ChatPublicKey | null;
-  };
-  lastMessage?: ChatMessage;
-  unreadCount: number;
-  createdAt?: string;
-}
-
-export const chatApi = {
-  getIdentity: () =>
-    request<{ success: boolean; data: ChatIdentity }>("/chat/identity"),
-
-  registerPublicKey: (publicKey: ChatPublicKey) =>
-    request<ApiMessage>("/chat/public-key", {
+    contact: string;
+  }) =>
+    request<ApiMessage>("/bookings/customers/guest", {
       method: "PUT",
-      body: JSON.stringify({ publicKey }),
+      body: JSON.stringify(data),
     }),
 
-  createRoom: () =>
-    request<{
-      success: boolean;
-      data: {
-        roomId: string;
-        userId: string;
-        admin: { userId: string; name: string; publicKey: ChatPublicKey };
-      };
-    }>("/chat/room", { method: "POST" }),
-
-  getMessages: (userId: string) =>
-    request<{ success: boolean; data: ChatMessage[] }>(`/chat/messages/${userId}`),
-
-  getConversations: () =>
-    request<{ success: boolean; data: AdminConversation[] }>("/chat/conversations"),
+  deleteGuestCustomer: (data: {
+    name: string;
+    contact: string | null;
+  }) =>
+    request<ApiMessage>("/bookings/customers/guest", {
+      method: "DELETE",
+      body: JSON.stringify(data),
+    }),
 };

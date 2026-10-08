@@ -1,349 +1,753 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, X, Send, ShieldCheck } from "lucide-react";
-import { chatApi, type ChatMessage } from "../../services/api";
-import { getSocket } from "../../services/socket";
-import {
-  decryptChatMessage,
-  encryptChatMessage,
-  getOrCreateChatKeyPair,
-  trustPeerKey,
-} from "../../services/chatEncryption";
+import { MessageSquare, X, Send, Smile, Phone, Video } from "lucide-react";
+import { io } from "socket.io-client";
+import EmojiPicker, { Theme } from "emoji-picker-react";
+import WebRTCCall from "./WebRTCCall";
 import toast from "react-hot-toast";
-import { OPEN_SUPPORT_CHAT_EVENT } from "./supportChatEvents";
-
-type DisplayChatMessage = ChatMessage & { displayText: string };
+import { getAuthToken, SOCKET_URL, API_BASE_URL } from "../../services/api";
 
 export default function UserChatWidget() {
-  const token = localStorage.getItem("gaming_token");
-  const role = (localStorage.getItem("gaming_user_role") || "user").toLowerCase();
+  const [authStamp, setAuthStamp] = useState(0);
 
-  if (!token || role === "admin" || role === "manager" || role === "staff") {
+  useEffect(() => {
+    const handleAuthChange = () => setAuthStamp((stamp) => stamp + 1);
+    window.addEventListener("auth_changed", handleAuthChange);
+    return () => window.removeEventListener("auth_changed", handleAuthChange);
+  }, []);
+
+  const token = localStorage.getItem("gaming_token");
+  const role = (localStorage.getItem("gaming_user_role") || "").toLowerCase();
+  const userName = localStorage.getItem("gaming_user_name") || "Player";
+  const userId = localStorage.getItem("gaming_user_id") || "";
+
+  if (!token || role !== "user" || !userId) {
     return null;
   }
 
-  return <AuthenticatedUserChatWidget key={`${token}:${role}`} />;
+  return <ChatWidget key={authStamp} userId={userId} userName={userName} />;
 }
 
-function AuthenticatedUserChatWidget() {
+function ChatWidget({ userId, userName }: { userId: string; userName: string }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState<DisplayChatMessage[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [socket, setSocket] = useState<any>(null);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [chatStatus, setChatStatus] = useState("Preparing encrypted chat...");
-  const [isChatReady, setIsChatReady] = useState(false);
-  const [setupAttempt, setSetupAttempt] = useState(0);
+  const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
+  const [reactingMsgId, setReactingMsgId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{data: string, name: string, type: 'image' | 'document'} | null>(null);
+  
+  // Call States
+  const [callData, setCallData] = useState<{isIncoming: boolean, type: 'audio'|'video', callerName: string} | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const userIdRef = useRef("");
-  const privateKeyRef = useRef<CryptoKey | null>(null);
-  const publicKeyRef = useRef<CryptoKey | null>(null);
-  const recipientKeyRef = useRef<CryptoKey | null>(null);
-
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Connect immediately so replies can update the unread badge.
   useEffect(() => {
-    let isMounted = true;
-    if (!isOpen) return;
+    const newSocket = io(SOCKET_URL, { auth: { token: getAuthToken() } });
+    setSocket(newSocket);
 
-    const initializeChat = async () => {
-      try {
-        const identityResponse = await chatApi.getIdentity();
-        const identity = identityResponse.data;
-        if (identity.role !== "user") {
-          throw new Error("This secure support chat is only available to customer accounts.");
+    newSocket.on("connect_error", (error) => {
+      console.error("Support chat connection failed:", error.message);
+      toast.error("Support chat is currently unavailable.");
+    });
+
+    newSocket.on("receive_message", (msg: any) => {
+      setMessages((prev) => prev.some((existing) => existing._id === msg._id) ? prev : [...prev, msg]);
+      setIsOpen((currentOpen) => {
+        if (!currentOpen && msg.senderType === "admin") {
+          setUnreadCount((prev) => prev + 1);
         }
+        return currentOpen;
+      });
+    });
 
-        const keys = await getOrCreateChatKeyPair(identity.userId, identity.publicKey);
-        if (!identity.publicKey) {
-          await chatApi.registerPublicKey(keys.publicJwk);
+    newSocket.on("message_deleted", ({ messageId, type, role: delRole, updatedMessage }) => {
+      setMessages((prev) => {
+        if (type === 'everyone') {
+          return prev.map(m => m._id === messageId ? updatedMessage : m);
+        } else if (type === 'me' && delRole === 'user') {
+          return prev.filter(m => m._id !== messageId);
         }
+        return prev;
+      });
+    });
 
-        await chatApi.createRoom();
-        const refreshedIdentity = await chatApi.getIdentity();
-        const recipient = refreshedIdentity.data.recipient;
-        if (!recipient) {
-          if (isMounted) {
-            setChatStatus("An admin needs to set up encrypted chat before you can start.");
-          }
-          return;
+    newSocket.on("message_reacted", ({ messageId, reaction }) => {
+      setMessages((prev) => prev.map(m => m._id === messageId ? { ...m, reaction } : m));
+    });
+
+    newSocket.on("incoming_call", ({ callerName, callType }) => {
+      setCallData({ isIncoming: true, type: callType, callerName });
+    });
+
+    // Load history
+    fetch(`${API_BASE_URL}/chat/history/room_${userId}`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setMessages((previous) => {
+            const byId = new Map(data.messages.map((message: any) => [message._id, message]));
+            previous.forEach((message) => byId.set(message._id, message));
+            return Array.from(byId.values());
+          });
+          const unread = data.messages.filter((m: any) => m.senderType === "admin" && !m.isRead).length;
+          setUnreadCount(unread);
         }
+      })
+      .catch((error) => {
+        console.error("Unable to load support chat history:", error);
+        toast.error("Unable to load support chat history.");
+      });
 
-        const recipientKey = await trustPeerKey(identity.userId, recipient.userId, recipient.publicKey);
-        userIdRef.current = identity.userId;
-        privateKeyRef.current = keys.privateKey;
-        publicKeyRef.current = keys.publicKey;
-        recipientKeyRef.current = recipientKey;
-
-        const history = await chatApi.getMessages("me");
-        const decryptedMessages = await Promise.all(
-          history.data.map(async (message) => ({
-            ...message,
-            displayText: await decryptChatMessage(message, keys.privateKey, "user", identity.userId),
-          }))
-        );
-
-        if (isMounted) {
-          setMessages(decryptedMessages);
-          setIsChatReady(true);
-          setChatStatus("End-to-end encrypted");
-          getSocket()?.emit("mark_as_read", "me");
-        }
-      } catch (error) {
-        console.error("Secure chat setup failed:", error);
-        if (isMounted) {
-          setChatStatus(error instanceof Error ? error.message : "Could not set up encrypted chat.");
-          toast.error("Secure chat could not be initialized.");
-        }
-      }
-    };
-
-    void initializeChat();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, setupAttempt]);
-
-  const openChat = () => {
-    setIsOpen(true);
-    setChatStatus("Creating your private support room...");
-    setSetupAttempt((attempt) => attempt + 1);
-  };
-
-  useEffect(() => {
-    const socket = getSocket();
-    if (!socket) return;
-
-    const handleNewMessage = async (msg: ChatMessage) => {
-      const privateKey = privateKeyRef.current;
-      const userId = userIdRef.current;
-      if (!isChatReady || !privateKey || !userId) return;
-      try {
-        const displayMessage = {
-          ...msg,
-          displayText: await decryptChatMessage(msg, privateKey, "user", userId),
-        };
-        setMessages((prev) =>
-          prev.some((existing) => existing._id === msg._id)
-            ? prev
-            : [...prev, displayMessage]
-        );
-        if (!isOpen && msg.senderRole !== "user") {
-          setUnreadCount((count) => count + 1);
-        }
-      } catch (error) {
-        console.error("Could not decrypt incoming support message:", error);
-        toast.error("A support message could not be decrypted on this device.");
-      }
-    };
-
-    socket.on("new_message", handleNewMessage);
-
-    const handleOpenEvent = () => {
-      openChat();
-      setUnreadCount(0);
-    };
-    window.addEventListener(OPEN_SUPPORT_CHAT_EVENT, handleOpenEvent);
-
-    return () => {
-      socket.off("new_message", handleNewMessage);
-      window.removeEventListener(OPEN_SUPPORT_CHAT_EVENT, handleOpenEvent);
-    };
-  }, [isOpen, isChatReady]);
+    return () => { newSocket.disconnect(); };
+  }, [userId, userName]);
 
   useEffect(() => {
     if (isOpen) {
+      setUnreadCount(0);
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      fetch(`${API_BASE_URL}/chat/mark-read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+        body: JSON.stringify({ roomId: `room_${userId}` })
+      }).catch((error) => console.error("Unable to mark support messages read:", error));
     }
-  }, [isOpen, messages]);
+  }, [messages, isOpen, userId]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || sending || !isChatReady) return;
+  const handleSend = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!input.trim() && !selectedFile) return;
+    if (!socket) return;
 
-    const textToSend = input.trim();
-    const socket = getSocket();
-    if (!socket?.connected) {
-      toast.error("Support chat is unavailable right now. Please try again.");
+    socket.emit("send_message", {
+      receiverId: "admin",
+      text: input,
+      fileData: selectedFile?.data,
+      fileName: selectedFile?.name,
+      fileType: selectedFile?.type,
+    }, (response: { error?: string }) => {
+      if (response?.error) toast.error(response.error);
+    });
+    setInput("");
+    setSelectedFile(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File is too large (max 5MB)");
       return;
     }
 
-    const ownPublicKey = publicKeyRef.current;
-    const privateKey = privateKeyRef.current;
-    const recipientKey = recipientKeyRef.current;
-    const userId = userIdRef.current;
-    if (!ownPublicKey || !privateKey || !recipientKey || !userId) {
-      toast.error("Encrypted chat is not ready on this device.");
-      return;
-    }
-
-    setSending(true);
-    try {
-      const encryptedPayload = await encryptChatMessage(
-        textToSend,
-        ownPublicKey,
-        recipientKey,
-        userId
-      );
-      socket.emit("send_message", { encryptedPayload }, async (res: {
-        success: boolean;
-        message?: ChatMessage;
-        error?: string;
-      }) => {
-        setSending(false);
-        if (!res.success || !res.message) {
-          toast.error(res.error || "Could not send your message.");
-          return;
-        }
-        try {
-          const sentMessage = {
-            ...res.message,
-            displayText: await decryptChatMessage(
-              res.message,
-              privateKey,
-              "user",
-              userId
-            ),
-          };
-          setInput("");
-          setMessages((prev) =>
-            prev.some((message) => message._id === sentMessage._id)
-              ? prev
-              : [...prev, sentMessage]
-          );
-        } catch (error) {
-          console.error("Could not decrypt sent support message:", error);
-          toast.error("Message was sent, but could not be decrypted on this device.");
-        }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSelectedFile({
+        data: reader.result as string,
+        name: file.name,
+        type: isImage ? 'image' : 'document'
       });
-    } catch (error) {
-      setSending(false);
-      console.error("Could not encrypt support message:", error);
-      toast.error("Could not encrypt your message.");
-    }
+    };
+    reader.readAsDataURL(file);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleDelete = (msgId: string, type: 'me' | 'everyone') => {
+    if (!socket) return;
+    socket.emit("delete_message", { messageId: msgId, type, role: 'user' }, () => {
+      setDeletingMsgId(null);
+    });
+  };
+
+  const handleReact = (msgId: string, emoji: string) => {
+    if (!socket) return;
+    socket.emit("react_message", { messageId: msgId, reaction: emoji });
+    setReactingMsgId(null);
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return "";
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-[9999]">
-      {/* Floating Toggle Button */}
+    <div className="fixed inset-x-4 bottom-4 z-[9999] flex justify-end sm:inset-x-auto sm:bottom-6 sm:right-6">
       {!isOpen && (
-        <button
-          onClick={() => {
-            openChat();
-            setUnreadCount(0);
-          }}
-          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-[0_0_25px_rgba(124,58,237,0.8)] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
-          title="Chat with Support"
+        <button 
+          onClick={() => setIsOpen(true)} 
+          className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-violet-600 to-indigo-600 text-white shadow-xl shadow-indigo-600/30 transition-all hover:scale-110 active:scale-95"
         >
-          <MessageSquare size={26} />
+          <MessageSquare size={24} />
           {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white shadow">
+            <span className="absolute -top-1 -right-1 flex h-5 w-5 animate-pulse items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-lg border-2 border-[#0f172a]">
               {unreadCount}
             </span>
           )}
         </button>
-      )}
+      )}{isOpen && (
+  <div
+    className="
+      fixed inset-0 z-[9999]
+      flex h-[100dvh] w-screen
+      flex-col overflow-hidden
+      rounded-none
+      border-0
+      bg-slate-900
+      shadow-none
+      transition-all
 
-      {/* Chat Window */}
-      {isOpen && (
-        <div className="flex h-[480px] w-[350px] sm:w-[380px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#16161e] shadow-2xl backdrop-blur-xl">
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-3.5 text-white">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 backdrop-blur-sm">
-                <ShieldCheck size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">GameZone Support</h3>
-                <p className="flex items-center gap-1.5 text-xs text-white/80">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  {chatStatus}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="rounded-lg p-1.5 text-white/80 transition hover:bg-white/10 hover:text-white"
-            >
-              <X size={18} />
-            </button>
-          </div>
+      sm:inset-auto
+      sm:right-4
+      sm:bottom-4
+      sm:h-[90dvh]
+      sm:w-[95vw]
+      sm:max-w-[900px]
+      sm:rounded-2xl
+      sm:border
+      sm:border-slate-700/50
+      sm:shadow-[0_20px_50px_rgba(0,0,0,0.5)]
 
-          {/* Messages list */}
-          <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm">
-            {!isChatReady && (
-              <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs text-amber-100">
-                <p>{chatStatus}</p>
-                {chatStatus.startsWith("An admin needs") && (
-                  <span className="mt-2 block">Please ask an admin to open the support Chat page once.</span>
-                )}
-              </div>
-            )}
-            {messages.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
-                <MessageSquare size={36} className="mb-2 opacity-30" />
-                <p className="font-medium">Have a question or need help?</p>
-                <p className="text-xs text-slate-500">Send a message to chat with admin.</p>
-              </div>
-            ) : (
-              messages.map((m) => {
-                const isMe = m.senderRole === "user";
-                return (
-                  <div
-                    key={m._id}
-                    className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
-                  >
-                    <span className="mb-1 text-[10px] text-slate-400">
-                      {isMe ? "You" : m.senderName || "Admin Support"}
-                    </span>
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
-                        isMe
-                          ? "rounded-br-none bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
-                          : "rounded-bl-none border border-white/10 bg-[#1f2335] text-slate-100"
-                      }`}
-                    >
-                      {!m.encryptedPayload && (
-                        <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wide text-amber-300">
-                          Legacy message · not encrypted
-                        </span>
-                      )}
-                      {m.displayText}
-                    </div>
-                    <span className="mt-1 text-[9px] text-slate-500">
-                      {m.createdAt
-                        ? new Date(m.createdAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+      lg:right-6
+      lg:bottom-6
+      lg:h-[85dvh]
+      lg:w-[70vw]
+      lg:max-w-[1100px]
+    "
+  >
+    {/* ================= CHAT HEADER ================= */}
+    <div className="flex shrink-0 items-center justify-between bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-4 text-white shadow-md sm:px-5">
+      <div className="min-w-0">
+        <h3 className="truncate text-sm font-bold tracking-wide sm:text-base">
+          Support Chat
+        </h3>
 
-          {/* Input box */}
-          <form onSubmit={handleSend} className="border-t border-white/10 bg-[#12121a] p-3">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Type your message..."
-                className="flex-1 rounded-xl border border-white/10 bg-[#1f2335] px-3.5 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-              />
-              <button
-                type="submit"
-                disabled={sending || !input.trim() || !isChatReady}
-                className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-40"
-              >
-                <Send size={16} />
-              </button>
-            </div>
-          </form>
+        <p className="text-[10px] text-indigo-200 sm:text-xs">
+          We usually reply instantly
+        </p>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() =>
+            setCallData({
+              isIncoming: false,
+              type: "audio",
+              callerName: "Admin",
+            })
+          }
+          className="rounded-lg p-2 transition-colors hover:bg-white/20"
+          aria-label="Audio call"
+        >
+          <Phone size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() =>
+            setCallData({
+              isIncoming: false,
+              type: "video",
+              callerName: "Admin",
+            })
+          }
+          className="rounded-lg p-2 transition-colors hover:bg-white/20"
+          aria-label="Video call"
+        >
+          <Video size={16} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="ml-1 rounded-lg p-2 transition-colors hover:bg-white/20"
+          aria-label="Close chat"
+        >
+          <X size={18} />
+        </button>
+      </div>
+    </div>
+
+    {/* ================= MESSAGES ================= */}
+    <div
+      className="
+        min-h-0
+        flex-1
+        overflow-y-auto
+        bg-[#0f172a]
+        p-3
+        sm:p-4
+      "
+    >
+      {messages.length === 0 && (
+        <div className="flex h-full flex-col items-center justify-center text-slate-500 opacity-70">
+          <MessageSquare size={36} className="mb-2" />
+
+          <p className="text-sm">
+            Send a message to start!
+          </p>
         </div>
       )}
+
+      <div className="space-y-4">
+        {messages.map((m, i) => (
+          <div
+            key={m._id || i}
+            className={`group relative flex flex-col ${
+              m.senderType === "user"
+                ? "items-end"
+                : "items-start"
+            }`}
+          >
+            <div
+              className={`flex w-full items-end gap-2 ${
+                m.senderType === "user"
+                  ? "flex-row-reverse"
+                  : "flex-row"
+              }`}
+            >
+              <div
+                onClick={() => {
+                  setDeletingMsgId(
+                    deletingMsgId === m._id
+                      ? null
+                      : m._id
+                  );
+
+                  setReactingMsgId(null);
+                }}
+                className={`
+                  relative
+                  max-w-[85%]
+                  cursor-pointer
+                  px-4 py-2.5
+                  text-sm
+                  shadow-sm
+                  transition-all
+                  sm:max-w-[75%]
+                  lg:max-w-[65%]
+
+                  ${
+                    m.senderType === "user"
+                      ? "rounded-2xl rounded-br-sm bg-gradient-to-r from-violet-600 to-indigo-600 text-white"
+                      : "rounded-2xl rounded-bl-sm border border-slate-700/50 bg-slate-800 text-slate-100"
+                  }
+                `}
+              >
+                {m.text && (
+                  <p className="break-words leading-relaxed">
+                    {m.text}
+                  </p>
+                )}
+
+                {m.fileType === "image" &&
+                  m.fileData && (
+                    <img
+                      src={m.fileData}
+                      alt="uploaded"
+                      className="
+                        mt-2
+                        max-h-[220px]
+                        max-w-full
+                        rounded-lg
+                        border
+                        border-white/10
+                        object-cover
+                        shadow-sm
+                      "
+                    />
+                  )}
+
+                {m.fileType === "document" &&
+                  m.fileData && (
+                    <a
+                      href={m.fileData}
+                      download={m.fileName}
+                      onClick={(e) =>
+                        e.stopPropagation()
+                      }
+                      className="
+                        mt-2
+                        flex
+                        max-w-full
+                        items-center
+                        gap-2
+                        rounded-lg
+                        bg-black/20
+                        p-2
+                        text-xs
+                        font-medium
+                        text-white
+                        transition-colors
+                        hover:bg-black/30
+                      "
+                    >
+                      <span>📄</span>
+
+                      <span className="truncate">
+                        {m.fileName}
+                      </span>
+                    </a>
+                  )}
+
+                <div
+                  className={`
+                    mt-1.5
+                    flex
+                    items-center
+                    text-[9px]
+                    ${
+                      m.senderType === "user"
+                        ? "justify-end text-indigo-200"
+                        : "justify-start text-slate-400"
+                    }
+                  `}
+                >
+                  {formatTime(
+                    m.createdAt ||
+                      new Date().toISOString()
+                  )}
+                </div>
+
+                {m.reaction && (
+                  <div
+                    className={`
+                      absolute
+                      -bottom-2
+                      rounded-full
+                      border
+                      border-slate-600
+                      bg-slate-700
+                      px-1.5
+                      text-sm
+                      shadow-sm
+                      ${
+                        m.senderType === "user"
+                          ? "-left-2"
+                          : "-right-2"
+                      }
+                    `}
+                  >
+                    {m.reaction}
+                  </div>
+                )}
+              </div>
+
+              {/* Reaction Button */}
+              {m._id && (
+                <div className="mb-2 opacity-0 transition-opacity group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+
+                      setReactingMsgId(
+                        reactingMsgId === m._id
+                          ? null
+                          : m._id
+                      );
+
+                      setDeletingMsgId(null);
+                    }}
+                    className="
+                      rounded-full
+                      border
+                      border-slate-700
+                      bg-slate-800
+                      p-1.5
+                      text-slate-400
+                      transition
+                      hover:text-indigo-400
+                    "
+                    aria-label="React to message"
+                  >
+                    <Smile size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Emoji Picker */}
+            {reactingMsgId === m._id &&
+              m._id && (
+                <div
+                  className={`
+                    absolute
+                    top-full
+                    z-[99999]
+                    mt-1
+                    max-w-[calc(100vw-1rem)]
+                    shadow-2xl
+                    ${
+                      m.senderType === "user"
+                        ? "right-2"
+                        : "left-2"
+                    }
+                  `}
+                >
+                  <EmojiPicker
+                    onEmojiClick={(emojiData) =>
+                      handleReact(
+                        m._id!,
+                        emojiData.emoji
+                      )
+                    }
+                    theme={Theme.DARK}
+                    width={280}
+                    height={350}
+                  />
+                </div>
+              )}
+
+            {/* Delete Menu */}
+            {deletingMsgId === m._id &&
+              m._id && (
+                <div
+                  className={`
+                    absolute
+                    top-full
+                    z-[99998]
+                    mt-2
+                    flex
+                    flex-col
+                    gap-1
+                    rounded-lg
+                    border
+                    border-slate-700/50
+                    bg-slate-800
+                    p-1.5
+                    shadow-xl
+                    ${
+                      m.senderType === "user"
+                        ? "right-0"
+                        : "left-0"
+                    }
+                  `}
+                >
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDelete(m._id!, "me")
+                    }
+                    className="
+                      whitespace-nowrap
+                      rounded-md
+                      px-3
+                      py-1.5
+                      text-left
+                      text-xs
+                      text-slate-300
+                      transition-colors
+                      hover:bg-slate-700
+                      hover:text-white
+                    "
+                  >
+                    Delete for me
+                  </button>
+
+                  {m.senderType === "user" && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDelete(
+                          m._id!,
+                          "everyone"
+                        )
+                      }
+                      className="
+                        whitespace-nowrap
+                        rounded-md
+                        px-3
+                        py-1.5
+                        text-left
+                        text-xs
+                        text-red-400
+                        transition-colors
+                        hover:bg-slate-700
+                        hover:text-red-300
+                      "
+                    >
+                      Delete for everyone
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDeletingMsgId(null)
+                    }
+                    className="
+                      whitespace-nowrap
+                      rounded-md
+                      px-3
+                      py-1.5
+                      text-left
+                      text-xs
+                      text-slate-400
+                      transition-colors
+                      hover:bg-slate-700
+                      hover:text-slate-300
+                    "
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+          </div>
+        ))}
+      </div>
+
+      <div ref={messagesEndRef} />
+    </div>
+
+    {/* ================= FILE PREVIEW ================= */}
+    {selectedFile && (
+      <div
+        className="
+          flex
+          shrink-0
+          items-center
+          justify-between
+          border-t
+          border-slate-700/50
+          bg-slate-800
+          p-3
+        "
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          {selectedFile.type === "image" ? (
+            <img
+              src={selectedFile.data}
+              alt="preview"
+              className="h-10 w-10 shrink-0 rounded object-cover"
+            />
+          ) : (
+            <div
+              className="
+                flex h-10 w-10 shrink-0 items-center justify-center rounded bg-indigo-600/20 text-indigo-400
+              "
+            >
+              📄
+            </div>
+          )}
+
+          <span className="truncate text-xs text-white">
+            {selectedFile.name}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setSelectedFile(null)}
+          className="ml-3 shrink-0 text-slate-400 hover:text-white"aria-label="Remove selected file"><X size={16} />
+        </button>
+      </div>
+    )}
+
+    {/* ================= MESSAGE INPUT ================= */}
+    <form
+      onSubmit={handleSend}className="flex shrink-0 items-center gap-2 border-t border-slate-700/50 bg-slate-900 p-3 sm:p-4">
+      <input
+        type="file"ref={fileInputRef} onChange={handleFileChange}className="hidden"/>
+
+      <button
+        type="button"
+        onClick={() =>
+          fileInputRef.current?.click()
+        }
+        className="
+          flex
+          h-10
+          w-10
+          shrink-0
+          items-center
+          justify-center
+          rounded-full
+          p-2
+          text-slate-400
+          transition-all
+          hover:bg-slate-800
+          hover:text-indigo-400
+        "
+        aria-label="Attach file"
+      >
+        <span className="text-2xl leading-none">
+          +
+        </span>
+      </button>
+
+      <input
+        type="text"
+        value={input}
+        onChange={(e) =>
+          setInput(e.target.value)
+        }
+        placeholder="Type your message..."
+        className="
+          min-w-0
+          flex-1
+          rounded-full
+          border
+          border-slate-700/50
+          bg-slate-800
+          px-4
+          py-2.5
+          text-sm
+          text-white
+          outline-none
+          transition-all
+          placeholder:text-slate-500
+          focus:ring-2
+          focus:ring-indigo-500/50
+        "
+      />
+
+      <button
+        type="submit"
+        disabled={
+          !input.trim() && !selectedFile
+        }
+        className="flex h-10
+          w-10
+          shrink-0 items-center justify-center rounded-full bg-gradient-to-tr
+          from-violet-600
+          to-indigo-600
+          text-white
+          shadow-lg
+          shadow-indigo-600/20
+          transition-all
+          hover:scale-105
+          active:scale-95
+          disabled:cursor-not-allowed
+          disabled:opacity-50
+        "
+        aria-label="Send message"
+      >
+        <Send size={16} className="-ml-0.5" />
+      </button>
+    </form>
+  </div>
+)}
+
+{/* ================= AUDIO / VIDEO CALL ================= */}
+{callData && (
+  <WebRTCCall
+    socket={socket}
+    roomId={`room_${userId}`}
+    isIncoming={callData.isIncoming}
+    initialCallType={callData.type}
+    callerName={callData.callerName}
+    onEnd={() => setCallData(null)}
+  />
+)}
     </div>
   );
 }

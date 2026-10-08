@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Gamepad2, Calendar, Clock, Monitor, Tv, History, CheckCircle2, ChevronRight, MailCheck, Pizza, Coffee, Eye, EyeOff, User, MessageSquare } from "lucide-react";
+import { Gamepad2, Calendar, Clock, Monitor, Tv, History, CheckCircle2, ChevronRight, MailCheck, Pizza, Coffee, Eye, EyeOff, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Spline from "@splinetool/react-spline";
 import { motion } from "framer-motion";
@@ -9,7 +9,6 @@ import type { Booking, CreateBookingData } from "../types/booking";
 import toast from "react-hot-toast";
 import Footer from "../components/Footer";
 import DashboardNavbar from "../components/DashboardNavbar";
-import { OPEN_SUPPORT_CHAT_EVENT } from "../components/chat/supportChatEvents";
 
 const SNACKS_MENU = [
   { id: "s1", name: "Cold Drink", price: 100, icon: <Coffee size={20} /> },
@@ -444,29 +443,6 @@ export default function UserDashboard() {
                       })()}
                     </div>
 
-                    {/* Stat 4: Live Support / Contact Admin */}
-                    <div className="group relative overflow-hidden bg-gradient-to-br from-violet-600/15 to-indigo-600/15 hover:from-violet-600/25 hover:to-indigo-600/25 rounded-2xl p-5 border border-violet-500/30 transition-all duration-300 hover:-translate-y-1 shadow-lg">
-                      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <MessageSquare size={64} className="text-violet-300" />
-                      </div>
-                      <p className="text-violet-200 text-sm font-medium mb-2 flex items-center gap-2">
-                        <MessageSquare size={16} className="text-violet-300" /> Live Admin Support
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isLoggedIn) {
-                            toast.error("Please login to chat with Admin.");
-                            setAuthModal("login");
-                            return;
-                          }
-                          window.dispatchEvent(new Event(OPEN_SUPPORT_CHAT_EVENT));
-                        }}
-                        className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-violet-500/30 transition-transform hover:scale-105 active:scale-95 cursor-pointer"
-                      >
-                        <MessageSquare size={14} /> Contact Admin
-                      </button>
-                    </div>
                   </div>
                 </div>
               </motion.div>
